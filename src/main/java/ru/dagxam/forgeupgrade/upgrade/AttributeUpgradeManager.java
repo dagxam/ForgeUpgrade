@@ -10,12 +10,14 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Применяет реальные бонусы ForgeUpgrade непосредственно к атрибутам предмета.
- * Старый уровень всегда удаляется перед установкой нового, поэтому +10/+30/+50/+70
- * не складываются между собой.
+ * Старые модификаторы ForgeUpgrade удаляются перед установкой нового уровня.
  */
 public final class AttributeUpgradeManager {
     private final NamespacedKey markerKey;
@@ -27,13 +29,13 @@ public final class AttributeUpgradeManager {
     private final NamespacedKey speedKey;
 
     public AttributeUpgradeManager(JavaPlugin plugin) {
-        this.markerKey = new NamespacedKey(plugin, "attribute_upgrade");
-        this.levelKey = new NamespacedKey(plugin, "attribute_upgrade_level");
-        this.armorKey = new NamespacedKey(plugin, "bonus_armor");
-        this.toughnessKey = new NamespacedKey(plugin, "bonus_armor_toughness");
-        this.knockbackKey = new NamespacedKey(plugin, "bonus_knockback_resistance");
-        this.damageKey = new NamespacedKey(plugin, "bonus_attack_damage");
-        this.speedKey = new NamespacedKey(plugin, "bonus_attack_speed");
+        markerKey = new NamespacedKey(plugin, "attribute_upgrade");
+        levelKey = new NamespacedKey(plugin, "attribute_upgrade_level");
+        armorKey = new NamespacedKey(plugin, "bonus_armor");
+        toughnessKey = new NamespacedKey(plugin, "bonus_armor_toughness");
+        knockbackKey = new NamespacedKey(plugin, "bonus_knockback_resistance");
+        damageKey = new NamespacedKey(plugin, "bonus_attack_damage");
+        speedKey = new NamespacedKey(plugin, "bonus_attack_speed");
     }
 
     public void apply(ItemStack item, UpgradeType type, int level) {
@@ -47,12 +49,7 @@ public final class AttributeUpgradeManager {
         data.set(markerKey, PersistentDataType.STRING, type.getId());
         data.set(levelKey, PersistentDataType.INTEGER, level);
 
-        // Армагедон использует отдельные специальные механики и не получает
-        // числовой Integer.MAX_VALUE в AttributeModifier.
-        if (!type.isInfinite() && level > 0) {
-            addBonuses(meta, item, level);
-        }
-
+        if (!type.isInfinite() && level > 0) addBonuses(meta, item, level);
         item.setItemMeta(meta);
     }
 
@@ -62,7 +59,6 @@ public final class AttributeUpgradeManager {
             add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, level);
             add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, level);
         }
-
         if (isMeleeWeapon(item)) {
             add(meta, Attribute.ATTACK_DAMAGE, damageKey, level);
             add(meta, Attribute.ATTACK_SPEED, speedKey, level);
@@ -71,21 +67,30 @@ public final class AttributeUpgradeManager {
 
     private void add(ItemMeta meta, Attribute attribute, NamespacedKey key, double amount) {
         meta.addAttributeModifier(attribute, new AttributeModifier(
-                key,
-                amount,
-                AttributeModifier.Operation.ADD_NUMBER,
-                EquipmentSlotGroup.ANY
-        ));
+                key, amount, AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.ANY));
     }
 
     private void removeForgeModifiers(ItemMeta meta) {
-        for (Map.Entry<Attribute, AttributeModifier> entry : meta.getAttributeModifiers()) {
-            NamespacedKey key = entry.getValue().getKey();
-            if (key.equals(armorKey) || key.equals(toughnessKey) || key.equals(knockbackKey)
-                    || key.equals(damageKey) || key.equals(speedKey)) {
-                meta.removeAttributeModifier(entry.getKey(), entry.getValue());
+        if (!meta.hasAttributeModifiers()) return;
+
+        Map<Attribute, Collection<AttributeModifier>> modifiers = meta.getAttributeModifiers().asMap();
+        List<Removal> removals = new ArrayList<>();
+
+        for (Map.Entry<Attribute, Collection<AttributeModifier>> entry : modifiers.entrySet()) {
+            for (AttributeModifier modifier : entry.getValue()) {
+                NamespacedKey key = modifier.getKey();
+                if (isForgeKey(key)) removals.add(new Removal(entry.getKey(), modifier));
             }
         }
+
+        for (Removal removal : removals) {
+            meta.removeAttributeModifier(removal.attribute(), removal.modifier());
+        }
+    }
+
+    private boolean isForgeKey(NamespacedKey key) {
+        return key.equals(armorKey) || key.equals(toughnessKey) || key.equals(knockbackKey)
+                || key.equals(damageKey) || key.equals(speedKey);
     }
 
     private boolean isArmor(ItemStack item) {
@@ -101,7 +106,10 @@ public final class AttributeUpgradeManager {
 
     public int getLevel(ItemStack item) {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) return 0;
-        Integer level = item.getItemMeta().getPersistentDataContainer().get(levelKey, PersistentDataType.INTEGER);
+        Integer level = item.getItemMeta().getPersistentDataContainer()
+                .get(levelKey, PersistentDataType.INTEGER);
         return level == null ? 0 : level;
     }
+
+    private record Removal(Attribute attribute, AttributeModifier modifier) {}
 }
