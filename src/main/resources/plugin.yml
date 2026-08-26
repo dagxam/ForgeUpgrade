@@ -1,0 +1,18 @@
+name: ForgeUpgrade
+version: 1.0.0-SNAPSHOT
+main: ru.dagxam.forgeupgrade.ForgeUpgrade
+api-version: '1.21'
+author: dagxam
+description: Русская система улучшения оружия, брони и инструментов.
+
+commands:
+  forgeupgrade:
+    description: Управление системой ForgeUpgrade.
+    usage: /forgeupgrade
+    aliases: [forge, улучшения]
+    permission: forgeupgrade.admin
+
+permissions:
+  forgeupgrade.admin:
+    description: Полный доступ к настройкам ForgeUpgrade.
+    default: op
