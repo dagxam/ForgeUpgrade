@@ -1,0 +1,50 @@
+name: Сборка ForgeUpgrade
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  сборка:
+    name: Компиляция плагина
+    runs-on: ubuntu-latest
+
+    steps:
+      # Получаем исходный код из репозитория
+      - name: Получение исходного кода
+        uses: actions/checkout@v4
+
+      # Устанавливаем Java 26
+      - name: Установка Java 26
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '26'
+          cache: maven
+
+      # Показываем версии Java и Maven для проверки
+      - name: Проверка версий
+        run: |
+          echo "Используемая версия Java:"
+          java -version
+          echo ""
+          echo "Используемая версия Maven:"
+          mvn -version
+
+      # Компилируем плагин
+      - name: Компиляция ForgeUpgrade
+        run: mvn clean package -DskipTests
+
+      # Загружаем готовый JAR
+      - name: Загрузка готового плагина
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForgeUpgrade-Java-26
+          path: target/*.jar
+          if-no-files-found: error
+          retention-days: 30
