@@ -48,12 +48,19 @@ public final class UpgradeApplier {
         return type.getLevel();
     }
 
-    public Result apply(ItemStack item, UpgradeType newType) {
-        if (!isSupported(item)) return Result.UNSUPPORTED;
+    /** Проверяет возможность применения улучшения без изменения предмета. */
+    public Result validate(ItemStack item, UpgradeType newType) {
+        if (!isSupported(item) || newType == null) return Result.UNSUPPORTED;
 
         UpgradeType current = getAppliedType(item);
         if (current == newType) return Result.ALREADY_APPLIED;
         if (current != null && !canReplace(current, newType)) return Result.CANNOT_DOWNGRADE;
+        return Result.SUCCESS;
+    }
+
+    public Result apply(ItemStack item, UpgradeType newType) {
+        Result validation = validate(item, newType);
+        if (validation != Result.SUCCESS) return validation;
 
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return Result.UNSUPPORTED;
