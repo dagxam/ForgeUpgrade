@@ -15,11 +15,8 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 /**
  * Обрабатывает улучшение предметов через интерфейс стола кузнеца.
  *
- * Первый рабочий вариант использует:
- * - слот предмета: улучшаемый предмет;
- * - слот добавочного материала: предмет улучшения ForgeUpgrade.
- *
- * Результат показывается только при допустимой последовательности улучшений.
+ * В версии 26.2 Bukkit API используются индексы слотов SmithingInventory:
+ * 0 — шаблон, 1 — улучшаемый предмет, 2 — добавочный материал.
  */
 public final class SmithingUpgradeListener implements Listener {
 
@@ -34,8 +31,8 @@ public final class SmithingUpgradeListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onPrepareSmithing(PrepareSmithingEvent event) {
         SmithingInventory inventory = event.getInventory();
-        ItemStack target = inventory.getInputEquipment();
-        ItemStack upgradeItem = inventory.getInputMineral();
+        ItemStack target = inventory.getItem(1);
+        ItemStack upgradeItem = inventory.getItem(2);
 
         UpgradeType type = upgradeManager.getUpgradeType(upgradeItem);
         if (type == null || !upgradeApplier.isSupported(target)) {
@@ -43,15 +40,13 @@ public final class SmithingUpgradeListener implements Listener {
             return;
         }
 
-        UpgradeApplier.Result validation = upgradeApplier.validate(target, type);
-        if (validation != UpgradeApplier.Result.SUCCESS) {
+        if (upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
             inventory.setResult(null);
             return;
         }
 
         ItemStack result = target.clone();
-        UpgradeApplier.Result applied = upgradeApplier.apply(result, type);
-        if (applied != UpgradeApplier.Result.SUCCESS) {
+        if (upgradeApplier.apply(result, type) != UpgradeApplier.Result.SUCCESS) {
             inventory.setResult(null);
             return;
         }
@@ -62,16 +57,12 @@ public final class SmithingUpgradeListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTakeResult(SmithItemEvent event) {
         SmithingInventory inventory = event.getInventory();
-        ItemStack target = inventory.getInputEquipment();
-        ItemStack upgradeItem = inventory.getInputMineral();
+        ItemStack target = inventory.getItem(1);
+        ItemStack upgradeItem = inventory.getItem(2);
         UpgradeType type = upgradeManager.getUpgradeType(upgradeItem);
 
-        if (type == null || !upgradeApplier.isSupported(target)) {
-            event.setCancelled(true);
-            return;
-        }
-
-        if (upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
+        if (type == null || !upgradeApplier.isSupported(target)
+                || upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
             event.setCancelled(true);
             return;
         }
