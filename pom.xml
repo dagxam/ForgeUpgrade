@@ -11,7 +11,7 @@
     <packaging>jar</packaging>
 
     <name>ForgeUpgrade</name>
-    <description>Русский плагин улучшения оружия, брони и инструментов для Bukkit 1.26.2 и Java 26.</description>
+    <description>Русский плагин улучшения оружия, брони и инструментов для Bukkit 26.2 и Java 26.</description>
 
     <properties>
         <!-- Основная версия Java для компиляции. -->
@@ -32,11 +32,14 @@
     </repositories>
 
     <dependencies>
-        <!-- API предоставляется сервером и не включается внутрь JAR плагина. -->
+        <!--
+            API предоставляется сервером и не включается внутрь JAR плагина.
+            Для версии Minecraft/Bukkit 26.2 используется артефакт 26.2-R0.1-SNAPSHOT.
+        -->
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
-            <version>1.26.2-R0.1-SNAPSHOT</version>
+            <version>26.2-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
