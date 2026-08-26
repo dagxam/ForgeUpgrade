@@ -14,15 +14,18 @@ import java.util.List;
 
 /**
  * Хранит уровень улучшения на предметах и безопасно применяет новые улучшения.
- * Реальное изменение боевых характеристик будет добавлено отдельным этапом.
+ * Уровень записывается одновременно в основное хранилище улучшения и в систему
+ * характеристик, поэтому следующие игровые этапы смогут использовать единый источник данных.
  */
 public final class UpgradeApplier {
     private final NamespacedKey typeKey;
     private final NamespacedKey levelKey;
+    private final AttributeUpgradeManager attributeUpgradeManager;
 
-    public UpgradeApplier(JavaPlugin plugin) {
+    public UpgradeApplier(JavaPlugin plugin, AttributeUpgradeManager attributeUpgradeManager) {
         this.typeKey = new NamespacedKey(plugin, "applied_upgrade_type");
         this.levelKey = new NamespacedKey(plugin, "upgrade_level");
+        this.attributeUpgradeManager = attributeUpgradeManager;
     }
 
     public boolean isSupported(ItemStack item) {
@@ -67,21 +70,18 @@ public final class UpgradeApplier {
 
         PersistentDataContainer data = meta.getPersistentDataContainer();
         data.set(typeKey, PersistentDataType.STRING, newType.getId());
-        if (newType.isInfinite()) {
-            data.set(levelKey, PersistentDataType.INTEGER, Math.max(71, getLevel(item)));
-        } else {
-            data.set(levelKey, PersistentDataType.INTEGER, newType.getLevel());
-        }
+        int storedLevel = newType.isInfinite()
+                ? Math.max(71, getLevel(item))
+                : newType.getLevel();
+        data.set(levelKey, PersistentDataType.INTEGER, storedLevel);
 
-        updateDisplay(meta, item, newType, getStoredLevel(data, newType));
+        updateDisplay(meta, item, newType, storedLevel);
         item.setItemMeta(meta);
-        return Result.SUCCESS;
-    }
 
-    private int getStoredLevel(PersistentDataContainer data, UpgradeType type) {
-        if (!type.isInfinite()) return type.getLevel();
-        Integer value = data.get(levelKey, PersistentDataType.INTEGER);
-        return value == null ? 71 : value;
+        // Второе техническое хранилище предназначено для следующих этапов:
+        // реальных характеристик, отделок и способностей Армагедона.
+        attributeUpgradeManager.apply(item, newType, storedLevel);
+        return Result.SUCCESS;
     }
 
     private boolean canReplace(UpgradeType current, UpgradeType next) {
