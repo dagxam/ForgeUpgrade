@@ -2,24 +2,29 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>ru.dagxam</groupId>
     <artifactId>ForgeUpgrade</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
     <name>ForgeUpgrade</name>
-    <description>Оптимизированная система улучшения оружия, брони и инструментов для Bukkit 1.26.2.</description>
+    <description>Русский плагин улучшения оружия, брони и инструментов для Bukkit 1.26.2 и Java 26.</description>
 
     <properties>
-        <!-- Плагин собирается под Java 26. -->
+        <!-- Основная версия Java для компиляции. -->
         <java.version>26</java.version>
         <maven.compiler.release>26</maven.compiler.release>
+
+        <!-- Кодировка всех исходников, конфигов и русских сообщений. -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
     <repositories>
-        <!-- Репозиторий API Bukkit/Spigot. -->
+        <!-- Официальный репозиторий Spigot API. -->
         <repository>
             <id>spigot-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
@@ -27,7 +32,7 @@
     </repositories>
 
     <dependencies>
-        <!-- Только API сервера: плагин не тащит лишние библиотеки внутрь JAR. -->
+        <!-- API предоставляется сервером и не включается внутрь JAR плагина. -->
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
@@ -37,21 +42,23 @@
     </dependencies>
 
     <build>
-        <finalName>${project.artifactId}-${project.version}</finalName>
+        <finalName>ForgeUpgrade</finalName>
+
         <plugins>
+            <!-- Компиляция строго Maven + Java 26. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.14.1</version>
                 <configuration>
-                    <release>${maven.compiler.release}</release>
+                    <release>26</release>
                     <encoding>UTF-8</encoding>
                     <showWarnings>true</showWarnings>
                     <parameters>true</parameters>
                 </configuration>
             </plugin>
 
-            <!-- Проверяет структуру JAR без добавления тяжёлых зависимостей. -->
+            <!-- Создание обычного лёгкого JAR без лишних библиотек. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
@@ -66,4 +73,5 @@
             </plugin>
         </plugins>
     </build>
+
 </project>
