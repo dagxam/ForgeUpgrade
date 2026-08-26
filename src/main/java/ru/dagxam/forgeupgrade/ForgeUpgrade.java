@@ -4,6 +4,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.command.ForgeUpgradeCommand;
 import ru.dagxam.forgeupgrade.listener.SmithingUpgradeListener;
 import ru.dagxam.forgeupgrade.recipe.RecipeManager;
+import ru.dagxam.forgeupgrade.upgrade.ArmorTrimUpgradeManager;
 import ru.dagxam.forgeupgrade.upgrade.AttributeUpgradeManager;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeManager;
@@ -12,7 +13,6 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeManager;
 public final class ForgeUpgrade extends JavaPlugin {
 
     private UpgradeManager upgradeManager;
-    private AttributeUpgradeManager attributeUpgradeManager;
     private UpgradeApplier upgradeApplier;
 
     @Override
@@ -22,8 +22,9 @@ public final class ForgeUpgrade extends JavaPlugin {
         saveResource("messages.yml", false);
 
         upgradeManager = new UpgradeManager(this);
-        attributeUpgradeManager = new AttributeUpgradeManager(this);
-        upgradeApplier = new UpgradeApplier(this, attributeUpgradeManager);
+        AttributeUpgradeManager attributeUpgradeManager = new AttributeUpgradeManager(this);
+        ArmorTrimUpgradeManager armorTrimUpgradeManager = new ArmorTrimUpgradeManager(this);
+        upgradeApplier = new UpgradeApplier(this, attributeUpgradeManager, armorTrimUpgradeManager);
 
         new RecipeManager(this, upgradeManager).registerRecipes();
         getServer().getPluginManager().registerEvents(
@@ -40,7 +41,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         getLogger().info("Загружено улучшений: " + upgradeManager.getTypes().length);
         getLogger().info("Крафты улучшений успешно зарегистрированы.");
         getLogger().info("Система улучшения через стол кузнеца успешно включена.");
-        getLogger().info("Система хранения уровней и характеристик улучшений успешно включена.");
+        getLogger().info("Система отделок брони успешно включена.");
     }
 
     @Override
@@ -50,10 +51,6 @@ public final class ForgeUpgrade extends JavaPlugin {
 
     public UpgradeManager getUpgradeManager() {
         return upgradeManager;
-    }
-
-    public AttributeUpgradeManager getAttributeUpgradeManager() {
-        return attributeUpgradeManager;
     }
 
     public UpgradeApplier getUpgradeApplier() {
