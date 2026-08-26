@@ -3,6 +3,7 @@ package ru.dagxam.forgeupgrade;
 import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.command.ForgeUpgradeCommand;
 import ru.dagxam.forgeupgrade.listener.ArmageddonArmorListener;
+import ru.dagxam.forgeupgrade.listener.ArmageddonWeaponListener;
 import ru.dagxam.forgeupgrade.listener.SmithingUpgradeListener;
 import ru.dagxam.forgeupgrade.recipe.RecipeManager;
 import ru.dagxam.forgeupgrade.upgrade.ArmorTrimUpgradeManager;
@@ -34,6 +35,9 @@ public final class ForgeUpgrade extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new ArmageddonArmorListener(this, upgradeApplier), this
         );
+        getServer().getPluginManager().registerEvents(
+                new ArmageddonWeaponListener(this, upgradeApplier), this
+        );
 
         ForgeUpgradeCommand command = new ForgeUpgradeCommand(this, upgradeManager);
         if (getCommand("forgeupgrade") != null) {
@@ -47,6 +51,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         getLogger().info("Система улучшения через стол кузнеца успешно включена.");
         getLogger().info("Система отделок брони успешно включена.");
         getLogger().info("Способности Армагедона для брони успешно включены.");
+        getLogger().info("Способности Армагедона для оружия успешно включены.");
     }
 
     @Override
