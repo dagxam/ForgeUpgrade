@@ -7,9 +7,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityAirChangeEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
-import org.bukkit.event.player.PlayerItemBreakEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
@@ -20,13 +18,18 @@ import org.bukkit.potion.PotionEffectType;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+
 /**
- * Выдаёт способности Армагедона только при надетой незеритовой броне с +∞.
- * Состояние проверяется редко, один раз в секунду, без тяжёлого постоянного сканирования.
+ * Способности Армагедона для незеритовой брони.
+ * Проверка выполняется раз в секунду. Плагин не снимает чужие эффекты игрока.
  */
 public final class ArmageddonArmorListener implements Listener {
     private final JavaPlugin plugin;
     private final UpgradeApplier upgradeApplier;
+    private final Set<UUID> pluginFlight = new HashSet<>();
 
     public ArmageddonArmorListener(JavaPlugin plugin, UpgradeApplier upgradeApplier) {
         this.plugin = plugin;
@@ -38,9 +41,7 @@ public final class ArmageddonArmorListener implements Listener {
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (Player player : plugin.getServer().getOnlinePlayers()) {
-                    updatePlayer(player);
-                }
+                for (Player player : plugin.getServer().getOnlinePlayers()) updatePlayer(player);
             }
         }.runTaskTimer(plugin, 20L, 20L);
     }
@@ -53,8 +54,7 @@ public final class ArmageddonArmorListener implements Listener {
             case NETHERITE_BOOTS -> player.getInventory().getBoots();
             default -> null;
         };
-        return item != null
-                && item.getType() == material
+        return item != null && item.getType() == material
                 && upgradeApplier.getAppliedType(item) == UpgradeType.ARMAGEDDON;
     }
 
@@ -64,27 +64,25 @@ public final class ArmageddonArmorListener implements Listener {
         boolean leggings = hasArmageddon(player, Material.NETHERITE_LEGGINGS);
         boolean boots = hasArmageddon(player, Material.NETHERITE_BOOTS);
 
-        if (helmet) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, 220, 0, true, false, false));
-        } else {
-            player.removePotionEffect(PotionEffectType.NIGHT_VISION);
-        }
-
+        // Короткие эффекты просто перестают обновляться после снятия брони.
+        // Это не удаляет эффекты, выданные другими плагинами или зельями.
+        if (helmet) giveEffect(player, PotionEffectType.NIGHT_VISION, 60, 0);
         if (boots) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, 220, 1, true, false, false));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 220, 0, true, false, false));
-        } else {
-            player.removePotionEffect(PotionEffectType.JUMP_BOOST);
-            player.removePotionEffect(PotionEffectType.SPEED);
+            giveEffect(player, PotionEffectType.JUMP_BOOST, 60, 1);
+            giveEffect(player, PotionEffectType.SPEED, 60, 0);
         }
 
+        UUID id = player.getUniqueId();
         if (chestplate) {
-            if (!player.isFlying() && !player.getAllowFlight()) {
+            if (!player.getAllowFlight()) {
                 player.setAllowFlight(true);
+                pluginFlight.add(id);
             }
-        } else if (player.getGameMode() != GameMode.CREATIVE && player.getGameMode() != GameMode.SPECTATOR) {
-            if (player.getAllowFlight()) player.setAllowFlight(false);
-            if (player.isFlying()) player.setFlying(false);
+        } else if (pluginFlight.remove(id)
+                && player.getGameMode() != GameMode.CREATIVE
+                && player.getGameMode() != GameMode.SPECTATOR) {
+            player.setFlying(false);
+            player.setAllowFlight(false);
         }
 
         if (leggings && player.getRemainingAir() < player.getMaximumAir()) {
@@ -92,32 +90,32 @@ public final class ArmageddonArmorListener implements Listener {
         }
     }
 
+    private void giveEffect(Player player, PotionEffectType type, int duration, int amplifier) {
+        PotionEffect current = player.getPotionEffect(type);
+        if (current != null && current.getDuration() > duration / 2 && current.getAmplifier() >= amplifier) return;
+        player.addPotionEffect(new PotionEffect(type, duration, amplifier, true, false, false));
+    }
+
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
         if (!hasArmageddon(player, Material.NETHERITE_LEGGINGS)) return;
-
         EntityDamageEvent.DamageCause cause = event.getCause();
-        if (cause == EntityDamageEvent.DamageCause.LAVA
-                || cause == EntityDamageEvent.DamageCause.FIRE
-                || cause == EntityDamageEvent.DamageCause.FIRE_TICK
-                || cause == EntityDamageEvent.DamageCause.HOT_FLOOR) {
+        if (cause == EntityDamageEvent.DamageCause.LAVA || cause == EntityDamageEvent.DamageCause.FIRE
+                || cause == EntityDamageEvent.DamageCause.FIRE_TICK || cause == EntityDamageEvent.DamageCause.HOT_FLOOR) {
             event.setCancelled(true);
         }
     }
 
     @EventHandler
     public void onAirChange(EntityAirChangeEvent event) {
-        if (!(event.getEntity() instanceof Player player)) return;
-        if (hasArmageddon(player, Material.NETHERITE_LEGGINGS)) {
+        if (event.getEntity() instanceof Player player && hasArmageddon(player, Material.NETHERITE_LEGGINGS)) {
             event.setAmount(player.getMaximumAir());
         }
     }
 
     @EventHandler
-    public void onJoin(PlayerJoinEvent event) {
-        updatePlayer(event.getPlayer());
-    }
+    public void onJoin(PlayerJoinEvent event) { updatePlayer(event.getPlayer()); }
 
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
@@ -125,7 +123,5 @@ public final class ArmageddonArmorListener implements Listener {
     }
 
     @EventHandler
-    public void onWorldChange(PlayerChangedWorldEvent event) {
-        updatePlayer(event.getPlayer());
-    }
+    public void onWorldChange(PlayerChangedWorldEvent event) { updatePlayer(event.getPlayer()); }
 }
