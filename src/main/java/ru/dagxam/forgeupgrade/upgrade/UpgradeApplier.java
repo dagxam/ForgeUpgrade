@@ -16,6 +16,8 @@ import java.util.List;
  * Хранит уровень улучшения на предметах и безопасно применяет новые улучшения.
  */
 public final class UpgradeApplier {
+    private static final String MARKER = "§8[ForgeUpgrade]";
+    private static final String LEVEL_PREFIX = "§eВсе характеристики: §6+";
     private final NamespacedKey typeKey;
     private final NamespacedKey levelKey;
     private final AttributeUpgradeManager attributeUpgradeManager;
@@ -46,10 +48,8 @@ public final class UpgradeApplier {
     public int getLevel(ItemStack item) {
         UpgradeType type = getAppliedType(item);
         if (type == null) return 0;
-        if (type.isInfinite()) {
-            Integer level = item.getItemMeta().getPersistentDataContainer().get(levelKey, PersistentDataType.INTEGER);
-            return level == null ? 71 : level;
-        }
+        Integer stored = item.getItemMeta().getPersistentDataContainer().get(levelKey, PersistentDataType.INTEGER);
+        if (type.isInfinite()) return stored == null ? 71 : Math.max(71, stored);
         return type.getLevel();
     }
 
@@ -89,21 +89,35 @@ public final class UpgradeApplier {
     private void updateDisplay(ItemMeta meta, ItemStack item, UpgradeType type, int level) {
         String originalName = meta.hasDisplayName() ? meta.getDisplayName() : getVanillaName(item.getType());
         originalName = originalName.replaceAll("§[0-9A-FK-ORa-fk-or]", "");
-        originalName = originalName.replaceAll(" \\+\\d+$", "");
-        meta.setDisplayName(type.isInfinite() ? "§4☠ " + originalName + " §c+∞" : "§6⚒ " + originalName + " §e+" + level);
+        originalName = originalName.replaceAll("\\s+\\+∞$", "");
+        originalName = originalName.replaceAll("\\s+\\+\\d+$", "");
+
+        meta.setDisplayName(type.isInfinite()
+                ? "§4☠ " + originalName + " §c+∞"
+                : "§6⚒ " + originalName + " §e+" + level);
 
         List<String> lore = new ArrayList<>();
         if (meta.hasLore() && meta.getLore() != null) {
             for (String line : meta.getLore()) {
-                if (!line.contains("§8[ForgeUpgrade]")) lore.add(line);
+                if (!isForgeUpgradeLore(line)) lore.add(line);
             }
         }
-        lore.add("§8[ForgeUpgrade]");
+        lore.add(MARKER);
         lore.add(type.isInfinite() ? "§4Улучшение: §cАрмагедон" : "§6Улучшение: §e" + type.getDisplayName());
-        lore.add(type.isInfinite() ? "§cВсе характеристики: §lБЕСКОНЕЧНО" : "§eВсе характеристики: §6+" + level);
+        lore.add(type.isInfinite() ? "§cВсе характеристики: §lБЕСКОНЕЧНО" : LEVEL_PREFIX + level);
         lore.add("§8Новое улучшение заменяет предыдущее.");
         meta.setLore(lore);
         meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+    }
+
+    private boolean isForgeUpgradeLore(String line) {
+        if (line == null) return false;
+        return line.equals(MARKER)
+                || line.startsWith("§4Улучшение: §cАрмагедон")
+                || line.startsWith("§6Улучшение: §e")
+                || line.startsWith(LEVEL_PREFIX)
+                || line.equals("§cВсе характеристики: §lБЕСКОНЕЧНО")
+                || line.equals("§8Новое улучшение заменяет предыдущее.");
     }
 
     private String getVanillaName(Material material) {
