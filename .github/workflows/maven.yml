@@ -4,13 +4,15 @@ on:
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
+
   workflow_dispatch:
 
 jobs:
-  сборка:
+  build:
     name: Компиляция плагина
     runs-on: ubuntu-latest
 
@@ -27,8 +29,8 @@ jobs:
           java-version: '26'
           cache: maven
 
-      # Показываем версии Java и Maven для проверки
-      - name: Проверка версий
+      # Проверяем версии перед компиляцией
+      - name: Проверка версий Java и Maven
         run: |
           echo "Используемая версия Java:"
           java -version
@@ -36,12 +38,12 @@ jobs:
           echo "Используемая версия Maven:"
           mvn -version
 
-      # Компилируем плагин
+      # Компилируем плагин через Maven
       - name: Компиляция ForgeUpgrade
         run: mvn clean package -DskipTests
 
-      # Загружаем готовый JAR
-      - name: Загрузка готового плагина
+      # Загружаем готовый JAR-файл
+      - name: Сохранение готового плагина
         uses: actions/upload-artifact@v4
         with:
           name: ForgeUpgrade-Java-26
