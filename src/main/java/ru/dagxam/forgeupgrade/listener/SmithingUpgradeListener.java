@@ -4,6 +4,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.PrepareSmithingEvent;
 import org.bukkit.event.inventory.SmithItemEvent;
 import org.bukkit.inventory.ItemStack;
@@ -14,12 +15,9 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
 /**
  * Обрабатывает улучшение предметов через интерфейс стола кузнеца.
- *
- * В версии 26.2 Bukkit API используются индексы слотов SmithingInventory:
- * 0 — шаблон, 1 — улучшаемый предмет, 2 — добавочный материал.
+ * Слоты SmithingInventory: 0 — шаблон, 1 — предмет, 2 — улучшение.
  */
 public final class SmithingUpgradeListener implements Listener {
-
     private final UpgradeManager upgradeManager;
     private final UpgradeApplier upgradeApplier;
 
@@ -33,14 +31,9 @@ public final class SmithingUpgradeListener implements Listener {
         SmithingInventory inventory = event.getInventory();
         ItemStack target = inventory.getItem(1);
         ItemStack upgradeItem = inventory.getItem(2);
-
         UpgradeType type = upgradeManager.getUpgradeType(upgradeItem);
-        if (type == null || !upgradeApplier.isSupported(target)) {
-            inventory.setResult(null);
-            return;
-        }
 
-        if (upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
+        if (!isValid(target, type)) {
             inventory.setResult(null);
             return;
         }
@@ -50,7 +43,6 @@ public final class SmithingUpgradeListener implements Listener {
             inventory.setResult(null);
             return;
         }
-
         inventory.setResult(result);
     }
 
@@ -61,15 +53,22 @@ public final class SmithingUpgradeListener implements Listener {
         ItemStack upgradeItem = inventory.getItem(2);
         UpgradeType type = upgradeManager.getUpgradeType(upgradeItem);
 
-        if (type == null || !upgradeApplier.isSupported(target)
-                || upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
+        if (!isValid(target, type)) {
             event.setCancelled(true);
             return;
         }
 
+        // Shift-клик и обычное взятие проходят через серверное потребление входных слотов.
+        // Повторная проверка выше защищает от изменения предметов между preview и click.
         if (event.getWhoClicked() instanceof Player player) {
             player.sendMessage("§a[ForgeUpgrade] §fУлучшение §e" + type.getDisplayName()
                     + " §fуспешно применено через стол кузнеца!");
         }
+    }
+
+    private boolean isValid(ItemStack target, UpgradeType type) {
+        return type != null
+                && upgradeApplier.isSupported(target)
+                && upgradeApplier.validate(target, type) == UpgradeApplier.Result.SUCCESS;
     }
 }
