@@ -5,6 +5,7 @@ import ru.dagxam.forgeupgrade.command.ForgeUpgradeCommand;
 import ru.dagxam.forgeupgrade.listener.ArmageddonArmorListener;
 import ru.dagxam.forgeupgrade.listener.ArmageddonWeaponListener;
 import ru.dagxam.forgeupgrade.listener.SmithingUpgradeListener;
+import ru.dagxam.forgeupgrade.listener.UpgradeAttributeListener;
 import ru.dagxam.forgeupgrade.recipe.RecipeManager;
 import ru.dagxam.forgeupgrade.upgrade.ArmorTrimUpgradeManager;
 import ru.dagxam.forgeupgrade.upgrade.AttributeUpgradeManager;
@@ -13,7 +14,6 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeManager;
 
 /** Главный класс ForgeUpgrade. */
 public final class ForgeUpgrade extends JavaPlugin {
-
     private UpgradeManager upgradeManager;
     private UpgradeApplier upgradeApplier;
 
@@ -29,15 +29,10 @@ public final class ForgeUpgrade extends JavaPlugin {
         upgradeApplier = new UpgradeApplier(this, attributeUpgradeManager, armorTrimUpgradeManager);
 
         new RecipeManager(this, upgradeManager).registerRecipes();
-        getServer().getPluginManager().registerEvents(
-                new SmithingUpgradeListener(upgradeManager, upgradeApplier), this
-        );
-        getServer().getPluginManager().registerEvents(
-                new ArmageddonArmorListener(this, upgradeApplier), this
-        );
-        getServer().getPluginManager().registerEvents(
-                new ArmageddonWeaponListener(this, upgradeApplier), this
-        );
+        getServer().getPluginManager().registerEvents(new SmithingUpgradeListener(upgradeManager, upgradeApplier), this);
+        getServer().getPluginManager().registerEvents(new UpgradeAttributeListener(upgradeApplier, attributeUpgradeManager), this);
+        getServer().getPluginManager().registerEvents(new ArmageddonArmorListener(this, upgradeApplier), this);
+        getServer().getPluginManager().registerEvents(new ArmageddonWeaponListener(this, upgradeApplier), this);
 
         ForgeUpgradeCommand command = new ForgeUpgradeCommand(this, upgradeManager);
         if (getCommand("forgeupgrade") != null) {
@@ -49,6 +44,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         getLogger().info("Загружено улучшений: " + upgradeManager.getTypes().length);
         getLogger().info("Крафты улучшений успешно зарегистрированы.");
         getLogger().info("Система улучшения через стол кузнеца успешно включена.");
+        getLogger().info("Реальные бонусы характеристик успешно включены.");
         getLogger().info("Система отделок брони успешно включена.");
         getLogger().info("Способности Армагедона для брони успешно включены.");
         getLogger().info("Способности Армагедона для оружия успешно включены.");
@@ -59,11 +55,6 @@ public final class ForgeUpgrade extends JavaPlugin {
         getLogger().info("ForgeUpgrade успешно выключен.");
     }
 
-    public UpgradeManager getUpgradeManager() {
-        return upgradeManager;
-    }
-
-    public UpgradeApplier getUpgradeApplier() {
-        return upgradeApplier;
-    }
+    public UpgradeManager getUpgradeManager() { return upgradeManager; }
+    public UpgradeApplier getUpgradeApplier() { return upgradeApplier; }
 }
