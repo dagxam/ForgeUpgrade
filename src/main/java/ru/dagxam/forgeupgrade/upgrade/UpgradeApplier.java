@@ -14,18 +14,20 @@ import java.util.List;
 
 /**
  * Хранит уровень улучшения на предметах и безопасно применяет новые улучшения.
- * Уровень записывается одновременно в основное хранилище улучшения и в систему
- * характеристик, поэтому следующие игровые этапы смогут использовать единый источник данных.
  */
 public final class UpgradeApplier {
     private final NamespacedKey typeKey;
     private final NamespacedKey levelKey;
     private final AttributeUpgradeManager attributeUpgradeManager;
+    private final ArmorTrimUpgradeManager armorTrimUpgradeManager;
 
-    public UpgradeApplier(JavaPlugin plugin, AttributeUpgradeManager attributeUpgradeManager) {
+    public UpgradeApplier(JavaPlugin plugin,
+                          AttributeUpgradeManager attributeUpgradeManager,
+                          ArmorTrimUpgradeManager armorTrimUpgradeManager) {
         this.typeKey = new NamespacedKey(plugin, "applied_upgrade_type");
         this.levelKey = new NamespacedKey(plugin, "upgrade_level");
         this.attributeUpgradeManager = attributeUpgradeManager;
+        this.armorTrimUpgradeManager = armorTrimUpgradeManager;
     }
 
     public boolean isSupported(ItemStack item) {
@@ -51,10 +53,8 @@ public final class UpgradeApplier {
         return type.getLevel();
     }
 
-    /** Проверяет возможность применения улучшения без изменения предмета. */
     public Result validate(ItemStack item, UpgradeType newType) {
         if (!isSupported(item) || newType == null) return Result.UNSUPPORTED;
-
         UpgradeType current = getAppliedType(item);
         if (current == newType) return Result.ALREADY_APPLIED;
         if (current != null && !canReplace(current, newType)) return Result.CANNOT_DOWNGRADE;
@@ -70,17 +70,13 @@ public final class UpgradeApplier {
 
         PersistentDataContainer data = meta.getPersistentDataContainer();
         data.set(typeKey, PersistentDataType.STRING, newType.getId());
-        int storedLevel = newType.isInfinite()
-                ? Math.max(71, getLevel(item))
-                : newType.getLevel();
+        int storedLevel = newType.isInfinite() ? Math.max(71, getLevel(item)) : newType.getLevel();
         data.set(levelKey, PersistentDataType.INTEGER, storedLevel);
 
         updateDisplay(meta, item, newType, storedLevel);
         item.setItemMeta(meta);
-
-        // Второе техническое хранилище предназначено для следующих этапов:
-        // реальных характеристик, отделок и способностей Армагедона.
         attributeUpgradeManager.apply(item, newType, storedLevel);
+        armorTrimUpgradeManager.apply(item, newType);
         return Result.SUCCESS;
     }
 
@@ -94,9 +90,7 @@ public final class UpgradeApplier {
         String originalName = meta.hasDisplayName() ? meta.getDisplayName() : getVanillaName(item.getType());
         originalName = originalName.replaceAll("§[0-9A-FK-ORa-fk-or]", "");
         originalName = originalName.replaceAll(" \\+\\d+$", "");
-        meta.setDisplayName(type.isInfinite()
-                ? "§4☠ " + originalName + " §c+∞"
-                : "§6⚒ " + originalName + " §e+" + level);
+        meta.setDisplayName(type.isInfinite() ? "§4☠ " + originalName + " §c+∞" : "§6⚒ " + originalName + " §e+" + level);
 
         List<String> lore = new ArrayList<>();
         if (meta.hasLore() && meta.getLore() != null) {
@@ -116,10 +110,5 @@ public final class UpgradeApplier {
         return material.name().toLowerCase().replace('_', ' ');
     }
 
-    public enum Result {
-        SUCCESS,
-        UNSUPPORTED,
-        ALREADY_APPLIED,
-        CANNOT_DOWNGRADE
-    }
+    public enum Result { SUCCESS, UNSUPPORTED, ALREADY_APPLIED, CANNOT_DOWNGRADE }
 }
