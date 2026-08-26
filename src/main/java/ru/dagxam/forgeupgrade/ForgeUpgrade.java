@@ -26,7 +26,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         }
 
         getLogger().info("ForgeUpgrade успешно включён.");
-        getLogger().info("Загружено улучшений: " + upgradeManager.getTypes().size());
+        getLogger().info("Загружено улучшений: " + upgradeManager.getTypes().length);
         getLogger().info("Крафты улучшений успешно зарегистрированы.");
     }
 
