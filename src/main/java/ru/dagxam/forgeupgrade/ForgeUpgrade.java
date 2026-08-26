@@ -30,7 +30,7 @@ public final class ForgeUpgrade extends JavaPlugin {
 
         new RecipeManager(this, upgradeManager).registerRecipes();
         getServer().getPluginManager().registerEvents(new SmithingUpgradeListener(upgradeManager, upgradeApplier), this);
-        getServer().getPluginManager().registerEvents(new UpgradeAttributeListener(upgradeApplier, attributeUpgradeManager), this);
+        getServer().getPluginManager().registerEvents(new UpgradeAttributeListener(), this);
         getServer().getPluginManager().registerEvents(new ArmageddonArmorListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonWeaponListener(this, upgradeApplier), this);
 
