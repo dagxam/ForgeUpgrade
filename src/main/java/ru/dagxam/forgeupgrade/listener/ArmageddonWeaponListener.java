@@ -1,20 +1,17 @@
 package ru.dagxam.forgeupgrade.listener;
 
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.AbstractArrow;
-import org.bukkit.entity.Arrow;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.ProjectileLaunchEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.NamespacedKey;
 import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
@@ -34,23 +31,28 @@ public final class ArmageddonWeaponListener implements Listener {
     }
 
     private boolean isMeleeWeapon(Material material) {
-        return material.name().endsWith("_SWORD")
-                || material.name().endsWith("_AXE")
-                || material == Material.TRIDENT;
+        return material.name().endsWith("_SWORD") || material.name().endsWith("_AXE") || material == Material.TRIDENT;
     }
 
-    @EventHandler
-    public void onMelee(EntityDamageByEntityEvent event) {
-        if (!(event.getDamager() instanceof Player player)) return;
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onDamage(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof LivingEntity target)) return;
-        ItemStack weapon = player.getInventory().getItemInMainHand();
-        if (!isMeleeWeapon(weapon.getType()) || !isArmageddon(weapon)) return;
 
-        target.setHealth(0.0D);
-        event.setCancelled(true);
+        if (event.getDamager() instanceof Player player) {
+            ItemStack weapon = player.getInventory().getItemInMainHand();
+            if (isMeleeWeapon(weapon.getType()) && isArmageddon(weapon)) {
+                event.setDamage(Math.max(target.getHealth(), target.getMaxHealth()) + 1024.0D);
+            }
+            return;
+        }
+
+        if (event.getDamager() instanceof AbstractArrow arrow
+                && arrow.getPersistentDataContainer().has(projectileKey, PersistentDataType.BYTE)) {
+            event.setDamage(Math.max(target.getHealth(), target.getMaxHealth()) + 1024.0D);
+        }
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onShoot(EntityShootBowEvent event) {
         if (!(event.getEntity() instanceof Player)) return;
         if (!(event.getProjectile() instanceof AbstractArrow arrow)) return;
@@ -58,16 +60,5 @@ public final class ArmageddonWeaponListener implements Listener {
 
         arrow.getPersistentDataContainer().set(projectileKey, PersistentDataType.BYTE, (byte) 1);
         event.setConsumeItem(false);
-    }
-
-    @EventHandler
-    public void onProjectileHit(ProjectileHitEvent event) {
-        Entity projectile = event.getEntity();
-        if (!(projectile instanceof Arrow arrow)) return;
-        if (!arrow.getPersistentDataContainer().has(projectileKey, PersistentDataType.BYTE)) return;
-        if (!(event.getHitEntity() instanceof LivingEntity target)) return;
-
-        target.setHealth(0.0D);
-        projectile.remove();
     }
 }
