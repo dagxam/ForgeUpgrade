@@ -1,9 +1,9 @@
 name: ForgeUpgrade
 version: 1.0.0-SNAPSHOT
 main: ru.dagxam.forgeupgrade.ForgeUpgrade
-api-version: '1.21'
+api-version: '1.26'
 author: dagxam
-description: Русская система улучшения оружия, брони и инструментов.
+description: Оптимизированная русская система улучшения оружия, брони и инструментов для Bukkit 1.26.2.
 
 commands:
   forgeupgrade:
