@@ -18,7 +18,7 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
 import java.util.Map;
 
-/** Способности Армагедона для оружия и дальнобойных предметов. */
+/** Дополнительные способности Армагедона для оружия работают только у незеритового оружия. */
 public final class ArmageddonWeaponListener implements Listener {
     private final JavaPlugin plugin;
     private final UpgradeApplier upgradeApplier;
@@ -30,8 +30,10 @@ public final class ArmageddonWeaponListener implements Listener {
         this.projectileKey = new NamespacedKey(plugin, "armageddon_projectile");
     }
 
-    private boolean isArmageddon(ItemStack item) {
-        return item != null && upgradeApplier.getAppliedType(item) == UpgradeType.ARMAGEDDON;
+    private boolean isArmageddonNetheriteWeapon(ItemStack item) {
+        if (item == null || upgradeApplier.getAppliedType(item) != UpgradeType.ARMAGEDDON) return false;
+        String name = item.getType().name();
+        return name.startsWith("NETHERITE_") && (name.endsWith("_SWORD") || name.endsWith("_AXE") || name.endsWith("_SPEAR"));
     }
 
     private boolean isMeleeWeapon(Material material) {
@@ -45,12 +47,14 @@ public final class ArmageddonWeaponListener implements Listener {
 
         if (event.getDamager() instanceof Player player) {
             ItemStack weapon = player.getInventory().getItemInMainHand();
-            if (isMeleeWeapon(weapon.getType()) && isArmageddon(weapon)) {
+            if (isMeleeWeapon(weapon.getType()) && isArmageddonNetheriteWeapon(weapon)) {
                 event.setDamage(Math.max(target.getHealth(), target.getMaxHealth()) + 1024.0D);
             }
             return;
         }
 
+        // Дальнобойная способность больше не даётся обычным материалам: специальных
+        // незеритовых луков/арбалетов нет, поэтому их +999999 остаётся только атрибутным бонусом.
         if (event.getDamager() instanceof AbstractArrow arrow
                 && arrow.getPersistentDataContainer().has(projectileKey, PersistentDataType.BYTE)) {
             event.setDamage(Math.max(target.getHealth(), target.getMaxHealth()) + 1024.0D);
@@ -61,18 +65,14 @@ public final class ArmageddonWeaponListener implements Listener {
     public void onShoot(EntityShootBowEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
         if (!(event.getProjectile() instanceof AbstractArrow arrow)) return;
-        if (!isArmageddon(event.getBow())) return;
+        if (!isArmageddonNetheriteWeapon(event.getBow())) return;
 
         arrow.getPersistentDataContainer().set(projectileKey, PersistentDataType.BYTE, (byte) 1);
 
-        // В API 26.2 старый setConsumeItem устарел и больше не является надёжным.
-        // Поэтому после фактического выстрела возвращаем ровно одну использованную стрелу.
         ItemStack consumed = event.getConsumable();
         if (consumed != null && event.shouldConsumeItem()) {
             restoreOneArrow(player, consumed);
         } else if (event.getBow() != null && event.getBow().getType() == Material.CROSSBOW) {
-            // Арбалет расходует стрелу при зарядке, а не при самом выстреле.
-            // После выстрела возвращаем одну стрелу, поэтому одна стрела становится бесконечной.
             restoreOneArrow(player, new ItemStack(Material.ARROW));
         }
     }
