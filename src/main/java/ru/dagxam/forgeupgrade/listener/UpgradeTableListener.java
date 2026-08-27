@@ -4,6 +4,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Particle;
+import org.bukkit.Color;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -37,13 +39,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Отдельный крафтовый Стол улучшений.
- * Обычные кузнечные столы не изменяются. Для крафтового стола используется
- * настоящий интерфейс кузнечного стола, но его три входных слота полностью
- * обрабатываются плагином, поэтому ванильные ограничения не блокируют оружие,
- * инструменты и Звезду Незера.
- */
+/** Отдельный Стол улучшений с нативным интерфейсом кузнечного стола. */
 public final class UpgradeTableListener implements Listener {
     private static final int TEMPLATE_SLOT = 0;
     private static final int TARGET_SLOT = 1;
@@ -55,7 +51,6 @@ public final class UpgradeTableListener implements Listener {
     private final UpgradeApplier upgradeApplier;
     private final NamespacedKey tableItemKey;
     private final File dataFile;
-
     private final Set<String> upgradeTables = new HashSet<>();
     private final Map<UUID, String> activeUpgradeTables = new HashMap<>();
 
@@ -104,49 +99,39 @@ public final class UpgradeTableListener implements Listener {
         if (!isUpgradeTable(event)) return;
         Inventory top = event.getView().getTopInventory();
         if (!(top instanceof SmithingInventory inventory)) return;
-
         int raw = event.getRawSlot();
+
         if (raw == RESULT_SLOT) {
             event.setCancelled(true);
             takeResult(event, inventory);
             return;
         }
-
         if (raw >= TEMPLATE_SLOT && raw <= MATERIAL_SLOT) {
             event.setCancelled(true);
             handleInputSlot(event, inventory, raw);
             return;
         }
-
-        // Shift-клик из инвентаря игрока: сами выбираем правильный слот.
         if (raw >= top.getSize() && event.isShiftClick()) {
             event.setCancelled(true);
             movePlayerItemToUpgradeSlots(event, inventory);
-            return;
         }
-
-        // Hotbar/number-key не должен обходить ручную проверку трёх входных слотов.
-        if (raw >= TEMPLATE_SLOT && raw < top.getSize()) event.setCancelled(true);
     }
 
     private void handleInputSlot(InventoryClickEvent event, SmithingInventory inventory, int slot) {
-        if (event.getClick() == ClickType.NUMBER_KEY || event.getClick() == ClickType.SWAP_OFFHAND) return;
-        if (event.getClick() == ClickType.DOUBLE_CLICK || event.getClick() == ClickType.CREATIVE) return;
+        if (event.getClick() == ClickType.NUMBER_KEY || event.getClick() == ClickType.SWAP_OFFHAND
+                || event.getClick() == ClickType.DOUBLE_CLICK || event.getClick() == ClickType.CREATIVE) return;
 
         ItemStack cursor = event.getCursor();
         ItemStack current = inventory.getItem(slot);
-        boolean cursorEmpty = isEmpty(cursor);
-        boolean currentEmpty = isEmpty(current);
-
-        // Забрать предмет из слота.
-        if (cursorEmpty) {
-            if (currentEmpty) return;
+        if (isEmpty(cursor)) {
+            if (isEmpty(current)) return;
             if (event.isRightClick() && current.getAmount() > 1) {
-                ItemStack one = current.clone();
-                one.setAmount((current.getAmount() + 1) / 2);
-                current.setAmount(current.getAmount() - one.getAmount());
-                inventory.setItem(slot, current);
-                event.setCursor(one);
+                int take = (current.getAmount() + 1) / 2;
+                ItemStack half = current.clone();
+                half.setAmount(take);
+                current.setAmount(current.getAmount() - take);
+                inventory.setItem(slot, current.getAmount() <= 0 ? null : current);
+                event.setCursor(half);
             } else {
                 inventory.setItem(slot, null);
                 event.setCursor(current);
@@ -155,10 +140,8 @@ public final class UpgradeTableListener implements Listener {
             return;
         }
 
-        // Положить только допустимый предмет.
         if (!isAllowedForSlot(slot, cursor, inventory)) return;
-
-        if (currentEmpty) {
+        if (isEmpty(current)) {
             if (event.isRightClick()) {
                 ItemStack one = cursor.clone();
                 one.setAmount(1);
@@ -174,24 +157,17 @@ public final class UpgradeTableListener implements Listener {
             inventory.setItem(slot, current);
             decreaseCursor(event, amount);
         } else if (!event.isRightClick()) {
-            // ЛКМ меняет предметы местами, если новый предмет разрешён в слоте.
             inventory.setItem(slot, cursor.clone());
             event.setCursor(current);
         }
-
         scheduleUpdate(inventory);
     }
 
     private void movePlayerItemToUpgradeSlots(InventoryClickEvent event, SmithingInventory inventory) {
         ItemStack clicked = event.getCurrentItem();
         if (isEmpty(clicked)) return;
-
         int destination = findDestination(clicked, inventory);
-        if (destination < 0) return;
-
-        ItemStack existing = inventory.getItem(destination);
-        if (!isEmpty(existing)) return;
-
+        if (destination < 0 || !isEmpty(inventory.getItem(destination))) return;
         inventory.setItem(destination, clicked.clone());
         event.setCurrentItem(null);
         scheduleUpdate(inventory);
@@ -209,7 +185,10 @@ public final class UpgradeTableListener implements Listener {
         return switch (slot) {
             case TEMPLATE_SLOT -> upgradeManager.getUpgradeType(item) != null;
             case TARGET_SLOT -> upgradeApplier.isSupported(item);
-            case MATERIAL_SLOT -> isUpgradeMaterial(item.getType());
+            case MATERIAL_SLOT -> {
+                UpgradeType type = upgradeManager.getUpgradeType(inventory.getItem(TEMPLATE_SLOT));
+                yield type != null && item.getType() == type.getSmithingMaterial();
+            }
             default -> false;
         };
     }
@@ -232,11 +211,9 @@ public final class UpgradeTableListener implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onDrag(InventoryDragEvent event) {
         if (!isUpgradeTable(event)) return;
-        // Ванильный drag снова применяет собственные ограничения кузнечного стола.
-        // Чтобы нельзя было обойти ручную проверку, блокируем drag только в верхние слоты.
         for (int raw : event.getRawSlots()) {
             if (raw < event.getView().getTopInventory().getSize()) {
                 event.setCancelled(true);
@@ -258,7 +235,6 @@ public final class UpgradeTableListener implements Listener {
         if (material.getType() != type.getSmithingMaterial()) return null;
         if (!upgradeApplier.isSupported(target)) return null;
         if (upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) return null;
-
         ItemStack result = target.clone();
         return upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS ? result : null;
     }
@@ -266,32 +242,27 @@ public final class UpgradeTableListener implements Listener {
     private void takeResult(InventoryClickEvent event, SmithingInventory inventory) {
         ItemStack result = createResult(inventory);
         if (isEmpty(result)) return;
-        ItemStack template = inventory.getItem(TEMPLATE_SLOT);
-        ItemStack target = inventory.getItem(TARGET_SLOT);
-        ItemStack material = inventory.getItem(MATERIAL_SLOT);
-        UpgradeType type = upgradeManager.getUpgradeType(template);
-        if (type == null || isEmpty(target) || isEmpty(material) || material.getType() != type.getSmithingMaterial()) return;
-
         Player player = event.getWhoClicked() instanceof Player p ? p : null;
         if (player == null) return;
+        ItemStack currentCursor = event.getCursor();
+        if (!event.isShiftClick() && !isEmpty(currentCursor)) return;
 
         if (event.isShiftClick()) {
             Map<Integer, ItemStack> left = player.getInventory().addItem(result);
             left.values().forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
         } else {
-            if (!isEmpty(event.getCursor())) return;
             event.setCursor(result);
         }
 
+        UpgradeType type = upgradeManager.getUpgradeType(inventory.getItem(TEMPLATE_SLOT));
         consumeOne(inventory, TEMPLATE_SLOT);
         consumeOne(inventory, TARGET_SLOT);
         consumeOne(inventory, MATERIAL_SLOT);
         inventory.setResult(null);
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            player.updateInventory();
-            inventory.setResult(createResult(inventory));
-        });
-        player.sendMessage("§a[ForgeUpgrade] §fУспешно применено: §e" + type.getDisplayName() + "§f.");
+        player.updateInventory();
+
+        if (type != null) playUpgradeEffect(player, type);
+        player.sendMessage("§a[ForgeUpgrade] §fУспешно применено: §e" + (type == null ? "улучшение" : type.getDisplayName()) + "§f.");
     }
 
     private void consumeOne(Inventory inventory, int slot) {
@@ -302,6 +273,58 @@ public final class UpgradeTableListener implements Listener {
             item.setAmount(item.getAmount() - 1);
             inventory.setItem(slot, item);
         }
+    }
+
+    private void playUpgradeEffect(Player player, UpgradeType type) {
+        Location center = player.getLocation().add(0, 1.0, 0);
+        switch (type) {
+            case GOLD -> spawnSimple(center, Particle.GLOW, 20);
+            case EMERALD -> spawnSimple(center, Particle.HAPPY_VILLAGER, 20);
+            case DIAMOND -> spawnSimple(center, Particle.END_ROD, 24);
+            case NETHERITE -> spawnSimple(center, Particle.FLAME, 24);
+            case ARMAGEDDON -> startRainbowEffect(player);
+        }
+    }
+
+    private void spawnSimple(Location center, Particle particle, int count) {
+        center.getWorld().spawnParticle(particle, center, count, 0.55, 0.75, 0.55, 0.02);
+    }
+
+    private void startRainbowEffect(Player player) {
+        // 1.5 секунды визуального радужного кольца после успешного улучшения.
+        final UUID id = player.getUniqueId();
+        final int[] step = {0};
+        new org.bukkit.scheduler.BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!player.isOnline() || step[0] >= 15) {
+                    cancel();
+                    return;
+                }
+                Location base = player.getLocation().add(0, 1.0, 0);
+                for (int i = 0; i < 18; i++) {
+                    double angle = (i / 18.0) * Math.PI * 2.0 + step[0] * 0.25;
+                    double y = Math.sin(angle * 2.0) * 0.15;
+                    Location point = base.clone().add(Math.cos(angle) * 0.75, y, Math.sin(angle) * 0.75);
+                    Color from = rainbowColor((i + step[0]) % 6);
+                    Color to = rainbowColor((i + step[0] + 1) % 6);
+                    Particle.DustTransition dust = new Particle.DustTransition(from, to, 1.1f);
+                    player.getWorld().spawnParticle(Particle.DUST_COLOR_TRANSITION, point, 2, 0, 0, 0, 0, dust);
+                }
+                step[0]++;
+            }
+        }.runTaskTimer(plugin, 0L, 2L);
+    }
+
+    private Color rainbowColor(int index) {
+        return switch (index) {
+            case 0 -> Color.RED;
+            case 1 -> Color.ORANGE;
+            case 2 -> Color.YELLOW;
+            case 3 -> Color.LIME;
+            case 4 -> Color.AQUA;
+            default -> Color.FUCHSIA;
+        };
     }
 
     @EventHandler
