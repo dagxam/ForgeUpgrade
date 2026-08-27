@@ -1,58 +1,103 @@
 package ru.dagxam.forgeupgrade.listener;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryType;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeManager;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
-/** Собственный стол улучшений ForgeUpgrade без ограничений ванильного стола кузнеца. */
+/**
+ * Отдельный крафтовый Стол улучшений.
+ * Внешне используется блок кузнечного стола, но обычные кузнечные столы полностью не затрагиваются.
+ * Окно использует нативный интерфейс SMITHING: шаблон + предмет + материал -> результат.
+ */
 public final class UpgradeTableListener implements Listener {
     private static final String TITLE = "§6Стол улучшений";
-    private static final int TEMPLATE_SLOT = 10;
-    private static final int TARGET_SLOT = 12;
-    private static final int MATERIAL_SLOT = 14;
-    private static final int RESULT_SLOT = 16;
+    private static final int TEMPLATE_SLOT = 0;
+    private static final int TARGET_SLOT = 1;
+    private static final int MATERIAL_SLOT = 2;
+    private static final int RESULT_SLOT = 3;
 
+    private final JavaPlugin plugin;
     private final UpgradeManager upgradeManager;
     private final UpgradeApplier upgradeApplier;
+    private final NamespacedKey tableItemKey;
+    private final File dataFile;
+    private final Set<String> upgradeTables = new HashSet<>();
 
     public UpgradeTableListener(JavaPlugin plugin, UpgradeManager upgradeManager, UpgradeApplier upgradeApplier) {
+        this.plugin = plugin;
         this.upgradeManager = upgradeManager;
         this.upgradeApplier = upgradeApplier;
+        this.tableItemKey = new NamespacedKey(plugin, "upgrade_table_item");
+        this.dataFile = new File(plugin.getDataFolder(), "upgrade-tables.yml");
+        loadTables();
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPlace(BlockPlaceEvent event) {
+        if (event.getBlockPlaced().getType() != Material.SMITHING_TABLE || !isUpgradeTableItem(event.getItemInHand())) return;
+        upgradeTables.add(locationKey(event.getBlockPlaced().getLocation()));
+        saveTables();
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBreak(BlockBreakEvent event) {
+        String key = locationKey(event.getBlock().getLocation());
+        if (!upgradeTables.remove(key)) return;
+
+        event.setDropItems(false);
+        event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), createUpgradeTableItem());
+        saveTables();
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
         if (event.getClickedBlock().getType() != Material.SMITHING_TABLE) return;
+
+        // Обычный кузнечный стол не меняем вообще.
+        if (!upgradeTables.contains(locationKey(event.getClickedBlock().getLocation()))) return;
+
         event.setCancelled(true);
         open(event.getPlayer());
     }
 
     private void open(Player player) {
-        Inventory inventory = Bukkit.createInventory(null, 27, TITLE);
-        inventory.setItem(RESULT_SLOT, null);
+        Inventory inventory = Bukkit.createInventory(null, InventoryType.SMITHING, TITLE);
         player.openInventory(inventory);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onClick(InventoryClickEvent event) {
-        if (!isUpgradeTable(event.getView().getTitle())) return;
+        if (!isUpgradeTable(event)) return;
+
         int raw = event.getRawSlot();
         Inventory top = event.getView().getTopInventory();
 
@@ -71,16 +116,17 @@ public final class UpgradeTableListener implements Listener {
                 event.setCancelled(true);
                 return;
             }
-            Bukkit.getScheduler().runTask(Bukkit.getPluginManager().getPlugin("ForgeUpgrade"), () -> updateResult(top));
+            scheduleUpdate(top);
             return;
         }
 
+        // Запрещаем shift-click из инвентаря игрока, чтобы Bukkit не применил ванильные ограничения.
         if (event.isShiftClick()) event.setCancelled(true);
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onDrag(InventoryDragEvent event) {
-        if (!isUpgradeTable(event.getView().getTitle())) return;
+        if (!isUpgradeTable(event)) return;
         for (int raw : event.getRawSlots()) {
             if (raw < event.getView().getTopInventory().getSize()
                     && raw != TEMPLATE_SLOT && raw != TARGET_SLOT && raw != MATERIAL_SLOT) {
@@ -88,8 +134,11 @@ public final class UpgradeTableListener implements Listener {
                 return;
             }
         }
-        Bukkit.getScheduler().runTask(Bukkit.getPluginManager().getPlugin("ForgeUpgrade"),
-                () -> updateResult(event.getView().getTopInventory()));
+        scheduleUpdate(event.getView().getTopInventory());
+    }
+
+    private void scheduleUpdate(Inventory inventory) {
+        Bukkit.getScheduler().runTask(plugin, () -> updateResult(inventory));
     }
 
     private void updateResult(Inventory inventory) {
@@ -107,8 +156,11 @@ public final class UpgradeTableListener implements Listener {
         }
 
         ItemStack result = target.clone();
-        if (upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS) inventory.setItem(RESULT_SLOT, result);
-        else inventory.setItem(RESULT_SLOT, null);
+        if (upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS) {
+            inventory.setItem(RESULT_SLOT, result);
+        } else {
+            inventory.setItem(RESULT_SLOT, null);
+        }
     }
 
     private void takeResult(InventoryClickEvent event, Inventory inventory) {
@@ -121,14 +173,14 @@ public final class UpgradeTableListener implements Listener {
         ItemStack material = inventory.getItem(MATERIAL_SLOT);
         UpgradeType type = upgradeManager.getUpgradeType(template);
         if (type == null || target == null || material == null || material.getType() != type.getSmithingMaterial()) return;
-        if (upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) return;
+        if (!upgradeApplier.isSupported(target) || upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) return;
 
         consumeOne(inventory, TEMPLATE_SLOT);
         consumeOne(inventory, TARGET_SLOT);
         consumeOne(inventory, MATERIAL_SLOT);
         event.setCursor(result);
         inventory.setItem(RESULT_SLOT, null);
-        updateResult(inventory);
+        scheduleUpdate(inventory);
 
         if (event.getWhoClicked() instanceof Player player) {
             player.sendMessage("§a[ForgeUpgrade] §fУспешно применено: §e" + type.getDisplayName() + "§f.");
@@ -144,7 +196,7 @@ public final class UpgradeTableListener implements Listener {
 
     @EventHandler
     public void onClose(InventoryCloseEvent event) {
-        if (!isUpgradeTable(event.getView().getTitle())) return;
+        if (!isUpgradeTable(event)) return;
         Inventory inventory = event.getInventory();
         Player player = (Player) event.getPlayer();
         for (int slot : new int[]{TEMPLATE_SLOT, TARGET_SLOT, MATERIAL_SLOT}) {
@@ -156,7 +208,55 @@ public final class UpgradeTableListener implements Listener {
         inventory.clear();
     }
 
-    private boolean isUpgradeTable(String title) {
-        return TITLE.equals(title);
+    private boolean isUpgradeTable(InventoryClickEvent event) {
+        return event.getView().getTopInventory().getType() == InventoryType.SMITHING
+                && TITLE.equals(event.getView().getTitle());
+    }
+
+    private boolean isUpgradeTable(InventoryDragEvent event) {
+        return event.getView().getTopInventory().getType() == InventoryType.SMITHING
+                && TITLE.equals(event.getView().getTitle());
+    }
+
+    private boolean isUpgradeTable(InventoryCloseEvent event) {
+        return event.getInventory().getType() == InventoryType.SMITHING
+                && TITLE.equals(event.getView().getTitle());
+    }
+
+    private boolean isUpgradeTableItem(ItemStack item) {
+        if (item == null || item.getType() != Material.SMITHING_TABLE || !item.hasItemMeta()) return false;
+        Byte marker = item.getItemMeta().getPersistentDataContainer().get(tableItemKey, PersistentDataType.BYTE);
+        return marker != null && marker == (byte) 1;
+    }
+
+    private ItemStack createUpgradeTableItem() {
+        ItemStack item = new ItemStack(Material.SMITHING_TABLE);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§6Стол улучшений");
+            meta.getPersistentDataContainer().set(tableItemKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private String locationKey(Location location) {
+        return location.getWorld().getUID() + ":" + location.getBlockX() + ":" + location.getBlockY() + ":" + location.getBlockZ();
+    }
+
+    private void loadTables() {
+        if (!dataFile.exists()) return;
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
+        upgradeTables.addAll(config.getStringList("tables"));
+    }
+
+    private void saveTables() {
+        YamlConfiguration config = new YamlConfiguration();
+        config.set("tables", upgradeTables.stream().sorted().toList());
+        try {
+            config.save(dataFile);
+        } catch (IOException exception) {
+            plugin.getLogger().warning("Не удалось сохранить расположение Столов улучшений: " + exception.getMessage());
+        }
     }
 }
