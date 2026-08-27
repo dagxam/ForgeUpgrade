@@ -2,6 +2,8 @@ package ru.dagxam.forgeupgrade.upgrade;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -21,12 +23,14 @@ public final class UpgradeApplier {
     private final NamespacedKey typeKey;
     private final NamespacedKey levelKey;
     private final AttributeUpgradeManager attributeUpgradeManager;
+    private final ArmorTrimUpgradeManager armorTrimUpgradeManager;
 
     public UpgradeApplier(JavaPlugin plugin, AttributeUpgradeManager attributeUpgradeManager,
-                          ArmorTrimUpgradeManager ignoredArmorTrimUpgradeManager) {
+                          ArmorTrimUpgradeManager armorTrimUpgradeManager) {
         this.typeKey = new NamespacedKey(plugin, "applied_upgrade_type");
         this.levelKey = new NamespacedKey(plugin, "upgrade_level");
         this.attributeUpgradeManager = attributeUpgradeManager;
+        this.armorTrimUpgradeManager = armorTrimUpgradeManager;
     }
 
     public boolean isSupported(ItemStack item) {
@@ -71,7 +75,23 @@ public final class UpgradeApplier {
         item.setItemMeta(meta);
 
         attributeUpgradeManager.apply(item, next, next.getLevel());
+
+        // ВАЖНО: раньше менеджер отделки передавался в конструктор, но вообще не вызывался.
+        // Поэтому броня сохраняла обычный цвет. Теперь цветная отделка применяется всегда.
+        armorTrimUpgradeManager.apply(item, next);
+
+        // Армагеддон получает постоянный магический блеск на оружии, инструментах и броне.
+        applyArmageddonVisual(item, next);
         return Result.SUCCESS;
+    }
+
+    private void applyArmageddonVisual(ItemStack item, UpgradeType type) {
+        if (type != UpgradeType.ARMAGEDDON || item == null || !item.hasItemMeta()) return;
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return;
+        meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+        item.setItemMeta(meta);
     }
 
     private void updateDisplay(ItemMeta meta, ItemStack item, UpgradeType type) {
