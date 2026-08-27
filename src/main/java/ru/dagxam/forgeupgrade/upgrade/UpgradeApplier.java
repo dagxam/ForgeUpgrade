@@ -15,6 +15,7 @@ import java.util.List;
 public final class UpgradeApplier {
     private static final String MARKER = "§8[ForgeUpgrade]";
     private static final String LEVEL_PREFIX = "§eВсе характеристики: §6+";
+    private static final String TOOL_EFFICIENCY_PREFIX = "§bСкорость работы: §fЭффективность ";
     private static final int ARMAGEDDON_BONUS = 999999;
 
     private final NamespacedKey typeKey;
@@ -95,6 +96,9 @@ public final class UpgradeApplier {
         lore.add(type.isInfinite()
                 ? "§cВсе характеристики: §l+" + ARMAGEDDON_BONUS
                 : LEVEL_PREFIX + type.getLevel());
+        if (isMiningTool(item.getType())) {
+            lore.add(TOOL_EFFICIENCY_PREFIX + type.getToolEfficiency());
+        }
         lore.add("§8Новое улучшение заменяет предыдущее.");
         meta.setLore(lore);
     }
@@ -104,8 +108,15 @@ public final class UpgradeApplier {
                 || line.startsWith("§4Улучшение: §cАрмагедон")
                 || line.startsWith("§6Улучшение: §e")
                 || line.startsWith(LEVEL_PREFIX)
+                || line.startsWith(TOOL_EFFICIENCY_PREFIX)
                 || line.equals("§cВсе характеристики: §l+" + ARMAGEDDON_BONUS)
                 || line.equals("§8Новое улучшение заменяет предыдущее."));
+    }
+
+    private boolean isMiningTool(Material material) {
+        String name = material.name();
+        return name.endsWith("_PICKAXE") || name.endsWith("_AXE")
+                || name.endsWith("_SHOVEL") || name.endsWith("_HOE");
     }
 
     private String getVanillaName(Material material) {
