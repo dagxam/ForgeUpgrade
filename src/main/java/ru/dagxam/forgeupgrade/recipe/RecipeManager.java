@@ -11,6 +11,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeManager;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
+import java.util.ArrayList;
+
 /** Регистрирует рецепты ForgeUpgrade. */
 public final class RecipeManager {
     private final JavaPlugin plugin;
@@ -48,7 +50,7 @@ public final class RecipeManager {
         recipe.setIngredient('E', Material.EMERALD);
         recipe.setIngredient('D', Material.DIAMOND);
         recipe.setIngredient('N', Material.NETHERITE_INGOT);
-        recipe.setIngredient('P', new RecipeChoice.MaterialChoice(Tag.PLANKS.getValues()));
+        recipe.setIngredient('P', new RecipeChoice.MaterialChoice(new ArrayList<>(Tag.PLANKS.getValues())));
         plugin.getServer().addRecipe(recipe);
     }
 
