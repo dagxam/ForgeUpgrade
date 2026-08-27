@@ -7,6 +7,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeManager;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
@@ -17,10 +18,12 @@ import java.util.ArrayList;
 public final class RecipeManager {
     private final JavaPlugin plugin;
     private final UpgradeManager upgradeManager;
+    private final NamespacedKey upgradeTableKey;
 
     public RecipeManager(JavaPlugin plugin, UpgradeManager upgradeManager) {
         this.plugin = plugin;
         this.upgradeManager = upgradeManager;
+        this.upgradeTableKey = new NamespacedKey(plugin, "upgrade_table_item");
     }
 
     public void registerRecipes() {
@@ -32,20 +35,25 @@ public final class RecipeManager {
         registerArmageddonRecipe();
     }
 
+    /** Создаёт именно кастомный Стол улучшений, который отличается от обычного кузнечного стола. */
+    private ItemStack createUpgradeTableItem() {
+        ItemStack result = new ItemStack(Material.SMITHING_TABLE);
+        ItemMeta meta = result.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§6Стол улучшений");
+            meta.getPersistentDataContainer().set(upgradeTableKey, PersistentDataType.BYTE, (byte) 1);
+            result.setItemMeta(meta);
+        }
+        return result;
+    }
+
     /**
      * Изумруд | Алмаз | Незеритовый слиток
      * Любые доски во втором и третьем ряду.
      */
     private void registerUpgradeTableRecipe() {
         NamespacedKey key = new NamespacedKey(plugin, "upgrade_table");
-        ItemStack result = new ItemStack(Material.SMITHING_TABLE);
-        ItemMeta meta = result.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("§6Стол улучшений");
-            result.setItemMeta(meta);
-        }
-
-        ShapedRecipe recipe = new ShapedRecipe(key, result);
+        ShapedRecipe recipe = new ShapedRecipe(key, createUpgradeTableItem());
         recipe.shape("EDN", "PPP", "PPP");
         recipe.setIngredient('E', Material.EMERALD);
         recipe.setIngredient('D', Material.DIAMOND);
