@@ -1,5 +1,6 @@
 package ru.dagxam.forgeupgrade.upgrade;
 
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
@@ -16,8 +17,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Применяет реальные бонусы ForgeUpgrade непосредственно к атрибутам предмета.
- * Старые модификаторы ForgeUpgrade удаляются перед установкой нового уровня.
+ * Реально изменяет характеристики предмета через AttributeModifier.
+ * Уровень +10/+30/+50/+70 всегда заменяет предыдущий бонус, а не складывается с ним.
  */
 public final class AttributeUpgradeManager {
     private final NamespacedKey markerKey;
@@ -43,23 +44,31 @@ public final class AttributeUpgradeManager {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return;
 
+        // Сначала полностью убираем старый уровень ForgeUpgrade.
         removeForgeModifiers(meta);
 
         PersistentDataContainer data = meta.getPersistentDataContainer();
         data.set(markerKey, PersistentDataType.STRING, type.getId());
         data.set(levelKey, PersistentDataType.INTEGER, level);
 
-        if (!type.isInfinite() && level > 0) addBonuses(meta, item, level);
+        // Армагедон не записывает Integer.MAX_VALUE в реальные атрибуты.
+        if (!type.isInfinite() && level > 0) {
+            addBonuses(meta, item.getType(), level);
+        }
+
         item.setItemMeta(meta);
     }
 
-    private void addBonuses(ItemMeta meta, ItemStack item, int level) {
-        if (isArmor(item)) {
+    private void addBonuses(ItemMeta meta, Material material, int level) {
+        // Броня: все её реальные боевые характеристики получают полный бонус уровня.
+        if (isArmor(material)) {
             add(meta, Attribute.ARMOR, armorKey, level);
             add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, level);
             add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, level);
         }
-        if (isMeleeWeapon(item)) {
+
+        // Оружие и инструменты: урон и скорость атаки реально изменяются на полный уровень.
+        if (hasMeleeAttributes(material)) {
             add(meta, Attribute.ATTACK_DAMAGE, damageKey, level);
             add(meta, Attribute.ATTACK_SPEED, speedKey, level);
         }
@@ -67,7 +76,11 @@ public final class AttributeUpgradeManager {
 
     private void add(ItemMeta meta, Attribute attribute, NamespacedKey key, double amount) {
         meta.addAttributeModifier(attribute, new AttributeModifier(
-                key, amount, AttributeModifier.Operation.ADD_NUMBER, EquipmentSlotGroup.ANY));
+                key,
+                amount,
+                AttributeModifier.Operation.ADD_NUMBER,
+                EquipmentSlotGroup.ANY
+        ));
     }
 
     private void removeForgeModifiers(ItemMeta meta) {
@@ -78,8 +91,9 @@ public final class AttributeUpgradeManager {
 
         for (Map.Entry<Attribute, Collection<AttributeModifier>> entry : modifiers.entrySet()) {
             for (AttributeModifier modifier : entry.getValue()) {
-                NamespacedKey key = modifier.getKey();
-                if (isForgeKey(key)) removals.add(new Removal(entry.getKey(), modifier));
+                if (isForgeKey(modifier.getKey())) {
+                    removals.add(new Removal(entry.getKey(), modifier));
+                }
             }
         }
 
@@ -89,19 +103,29 @@ public final class AttributeUpgradeManager {
     }
 
     private boolean isForgeKey(NamespacedKey key) {
-        return key.equals(armorKey) || key.equals(toughnessKey) || key.equals(knockbackKey)
-                || key.equals(damageKey) || key.equals(speedKey);
+        return key.equals(armorKey)
+                || key.equals(toughnessKey)
+                || key.equals(knockbackKey)
+                || key.equals(damageKey)
+                || key.equals(speedKey);
     }
 
-    private boolean isArmor(ItemStack item) {
-        String name = item.getType().name();
-        return name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE")
-                || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
+    private boolean isArmor(Material material) {
+        String name = material.name();
+        return name.endsWith("_HELMET")
+                || name.endsWith("_CHESTPLATE")
+                || name.endsWith("_LEGGINGS")
+                || name.endsWith("_BOOTS");
     }
 
-    private boolean isMeleeWeapon(ItemStack item) {
-        String name = item.getType().name();
-        return name.endsWith("_SWORD") || name.endsWith("_AXE") || item.getType().name().equals("TRIDENT");
+    private boolean hasMeleeAttributes(Material material) {
+        String name = material.name();
+        return name.endsWith("_SWORD")
+                || name.endsWith("_AXE")
+                || name.endsWith("_PICKAXE")
+                || name.endsWith("_SHOVEL")
+                || name.endsWith("_HOE")
+                || material == Material.TRIDENT;
     }
 
     public int getLevel(ItemStack item) {
