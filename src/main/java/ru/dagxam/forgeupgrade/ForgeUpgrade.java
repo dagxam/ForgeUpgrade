@@ -6,6 +6,7 @@ import ru.dagxam.forgeupgrade.listener.ArmageddonArmorListener;
 import ru.dagxam.forgeupgrade.listener.ArmageddonToolListener;
 import ru.dagxam.forgeupgrade.listener.ArmageddonWeaponListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeAttributeListener;
+import ru.dagxam.forgeupgrade.listener.UpgradeStatusHudListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeTableListener;
 import ru.dagxam.forgeupgrade.recipe.RecipeManager;
 import ru.dagxam.forgeupgrade.upgrade.ArmorTrimUpgradeManager;
@@ -31,12 +32,11 @@ public final class ForgeUpgrade extends JavaPlugin {
 
         new RecipeManager(this, upgradeManager).registerRecipes();
         getServer().getPluginManager().registerEvents(new UpgradeTableListener(this, upgradeManager, upgradeApplier), this);
-
-        // Обычный кузнечный стол не перехватывается и работает полностью по стандарту.
         getServer().getPluginManager().registerEvents(new UpgradeAttributeListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonArmorListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonWeaponListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonToolListener(this, upgradeApplier), this);
+        new UpgradeStatusHudListener(this, upgradeApplier);
 
         ForgeUpgradeCommand command = new ForgeUpgradeCommand(this, upgradeManager);
         if (getCommand("forgeupgrade") != null) {
@@ -50,9 +50,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         getLogger().info("Отдельный Стол улучшений успешно включён.");
         getLogger().info("Обычный кузнечный стол оставлен без изменений.");
         getLogger().info("Реальные бонусы характеристик успешно включены.");
-        getLogger().info("Способности Армагедона для брони успешно включены.");
-        getLogger().info("Способности Армагедона для оружия успешно включены.");
-        getLogger().info("Способности Армагедона для незеритовых инструментов успешно включены.");
+        getLogger().info("Цифровой HUD здоровья и брони успешно включён.");
     }
 
     @Override
