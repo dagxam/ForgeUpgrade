@@ -4,13 +4,11 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-/**
- * Применяет отделку брони, соответствующую уровню ForgeUpgrade.
- * Используется отражение, чтобы не привязывать компиляцию к изменённым
- * сигнатурам Bukkit API 26.2.
- */
+/** Применяет цветную отделку брони, соответствующую уровню ForgeUpgrade. */
 public final class ArmorTrimUpgradeManager {
     private final JavaPlugin plugin;
 
@@ -19,16 +17,15 @@ public final class ArmorTrimUpgradeManager {
     }
 
     public void apply(ItemStack item, UpgradeType type) {
-        if (item == null || !isArmor(item.getType()) || type.isInfinite()) return;
+        if (item == null || !isArmor(item.getType()) || type == null) return;
 
         String patternKey = switch (type) {
             case GOLD -> "dune";
             case EMERALD -> "tide";
             case DIAMOND -> "flow";
             case NETHERITE -> "sentry";
-            default -> null;
+            case ARMAGEDDON -> "spire";
         };
-        if (patternKey == null) return;
 
         try {
             Class<?> armorMetaClass = Class.forName("org.bukkit.inventory.meta.ArmorMeta");
@@ -45,22 +42,25 @@ public final class ArmorTrimUpgradeManager {
             Object patternKeyObject = minecraft.invoke(null, patternKey);
             Object materialKeyObject = minecraft.invoke(null, getMaterialKey(type));
 
-            Object patternRegistry = registryClass.getField("TRIM_PATTERN").get(null);
-            Object materialRegistry = registryClass.getField("TRIM_MATERIAL").get(null);
-            Method get = patternRegistry.getClass().getMethod("get", namespacedKeyClass);
-            Object pattern = get.invoke(patternRegistry, patternKeyObject);
-            Object material = materialRegistry.getClass().getMethod("get", namespacedKeyClass)
-                    .invoke(materialRegistry, materialKeyObject);
+            Field patternField = registryClass.getField("TRIM_PATTERN");
+            Field materialField = registryClass.getField("TRIM_MATERIAL");
+            Object patternRegistry = patternField.get(null);
+            Object materialRegistry = materialField.get(null);
 
+            // Получаем метод у интерфейса Registry, а не у внутренней реализации.
+            // В 26.2 реализация реестра может быть package-private, из-за чего старый код
+            // с patternRegistry.getClass().getMethod(...) не применял отделку вообще.
+            Method get = registryClass.getMethod("get", namespacedKeyClass);
+            Object pattern = get.invoke(patternRegistry, patternKeyObject);
+            Object material = get.invoke(materialRegistry, materialKeyObject);
             if (pattern == null || material == null) return;
 
-            Object trim = armorTrimClass
-                    .getConstructor(trimMaterialClass, trimPatternClass)
-                    .newInstance(material, pattern);
+            Constructor<?> constructor = armorTrimClass.getConstructor(trimMaterialClass, trimPatternClass);
+            Object trim = constructor.newInstance(material, pattern);
             armorMetaClass.getMethod("setTrim", armorTrimClass).invoke(meta, trim);
             item.setItemMeta((org.bukkit.inventory.meta.ItemMeta) meta);
         } catch (ReflectiveOperationException | LinkageError exception) {
-            plugin.getLogger().warning("Не удалось применить отделку брони ForgeUpgrade: " + exception.getMessage());
+            plugin.getLogger().warning("Не удалось применить цветную отделку ForgeUpgrade: " + exception.getMessage());
         }
     }
 
@@ -69,8 +69,10 @@ public final class ArmorTrimUpgradeManager {
             case GOLD -> "gold";
             case EMERALD -> "emerald";
             case DIAMOND -> "diamond";
-            case NETHERITE -> "netherite";
-            default -> "iron";
+            // Пользовательский медно-оранжевый визуальный стиль для незеритового улучшения.
+            case NETHERITE -> "copper";
+            // Армагеддон: красная отделка + отдельный магический блеск предмета.
+            case ARMAGEDDON -> "redstone";
         };
     }
 
