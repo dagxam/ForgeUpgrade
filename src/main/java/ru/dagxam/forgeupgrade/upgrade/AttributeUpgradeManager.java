@@ -4,6 +4,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.EquipmentSlotGroup;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -16,7 +17,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-/** Реально изменяет характеристики предмета через AttributeModifier. */
+/** Реально изменяет характеристики предмета через AttributeModifier и улучшает скорость работы инструментов. */
 public final class AttributeUpgradeManager {
     private final NamespacedKey markerKey;
     private final NamespacedKey levelKey;
@@ -25,6 +26,7 @@ public final class AttributeUpgradeManager {
     private final NamespacedKey knockbackKey;
     private final NamespacedKey damageKey;
     private final NamespacedKey speedKey;
+    private final NamespacedKey originalEfficiencyKey;
 
     public AttributeUpgradeManager(JavaPlugin plugin) {
         markerKey = new NamespacedKey(plugin, "attribute_upgrade");
@@ -34,6 +36,7 @@ public final class AttributeUpgradeManager {
         knockbackKey = new NamespacedKey(plugin, "bonus_knockback_resistance");
         damageKey = new NamespacedKey(plugin, "bonus_attack_damage");
         speedKey = new NamespacedKey(plugin, "bonus_attack_speed");
+        originalEfficiencyKey = new NamespacedKey(plugin, "original_efficiency_level");
     }
 
     public void apply(ItemStack item, UpgradeType type, int ignoredLevel) {
@@ -49,6 +52,7 @@ public final class AttributeUpgradeManager {
         data.set(levelKey, PersistentDataType.INTEGER, bonus);
 
         if (bonus > 0) addBonuses(meta, item.getType(), bonus);
+        applyToolEfficiency(meta, item.getType(), type);
         item.setItemMeta(meta);
     }
 
@@ -61,9 +65,30 @@ public final class AttributeUpgradeManager {
         }
 
         if (hasCombatAttributes(material)) {
-            // Урон и скорость должны работать только при реальном использовании предмета в основной руке.
+            // Урон и скорость атаки работают при реальном использовании предмета в основной руке.
             add(meta, Attribute.ATTACK_DAMAGE, damageKey, bonus, EquipmentSlotGroup.MAINHAND);
             add(meta, Attribute.ATTACK_SPEED, speedKey, bonus, EquipmentSlotGroup.MAINHAND);
+        }
+    }
+
+    /**
+     * ATTACK_SPEED не влияет на скорость добычи блоков. Поэтому кирки, топоры, лопаты и мотыги
+     * получают реальную Эффективность соответствующего уровня улучшения.
+     * Исходный уровень Эффективности сохраняется, чтобы улучшение не уничтожало старое зачарование.
+     */
+    private void applyToolEfficiency(ItemMeta meta, Material material, UpgradeType type) {
+        if (!isMiningTool(material)) return;
+
+        PersistentDataContainer data = meta.getPersistentDataContainer();
+        Integer original = data.get(originalEfficiencyKey, PersistentDataType.INTEGER);
+        if (original == null) {
+            original = meta.getEnchantLevel(Enchantment.EFFICIENCY);
+            data.set(originalEfficiencyKey, PersistentDataType.INTEGER, original);
+        }
+
+        int target = Math.max(original, type.getToolEfficiency());
+        if (target > 0) {
+            meta.addEnchant(Enchantment.EFFICIENCY, target, true);
         }
     }
 
@@ -109,6 +134,12 @@ public final class AttributeUpgradeManager {
         return name.endsWith("_SWORD") || name.endsWith("_AXE") || name.endsWith("_PICKAXE")
                 || name.endsWith("_SHOVEL") || name.endsWith("_HOE") || name.endsWith("_SPEAR")
                 || material == Material.TRIDENT;
+    }
+
+    private boolean isMiningTool(Material material) {
+        String name = material.name();
+        return name.endsWith("_PICKAXE") || name.endsWith("_AXE")
+                || name.endsWith("_SHOVEL") || name.endsWith("_HOE");
     }
 
     public int getLevel(ItemStack item) {
