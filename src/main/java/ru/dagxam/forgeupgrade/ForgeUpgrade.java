@@ -6,6 +6,7 @@ import ru.dagxam.forgeupgrade.listener.ArmageddonArmorListener;
 import ru.dagxam.forgeupgrade.listener.ArmageddonToolListener;
 import ru.dagxam.forgeupgrade.listener.ArmageddonWeaponListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeAttributeListener;
+import ru.dagxam.forgeupgrade.listener.UpgradeDefenseListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeStatusHudListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeTableListener;
 import ru.dagxam.forgeupgrade.recipe.RecipeManager;
@@ -33,6 +34,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         new RecipeManager(this, upgradeManager).registerRecipes();
         getServer().getPluginManager().registerEvents(new UpgradeTableListener(this, upgradeManager, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new UpgradeAttributeListener(this, upgradeApplier), this);
+        getServer().getPluginManager().registerEvents(new UpgradeDefenseListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonArmorListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonWeaponListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonToolListener(this, upgradeApplier), this);
@@ -51,6 +53,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         getLogger().info("Обычный кузнечный стол оставлен без изменений.");
         getLogger().info("Реальные бонусы характеристик успешно включены.");
         getLogger().info("Цифровой HUD здоровья и брони успешно включён.");
+        getLogger().info("Дополнительная защита улучшенной брони успешно включена.");
     }
 
     @Override
