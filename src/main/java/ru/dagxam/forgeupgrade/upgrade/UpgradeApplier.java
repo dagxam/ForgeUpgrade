@@ -15,6 +15,8 @@ import java.util.List;
 public final class UpgradeApplier {
     private static final String MARKER = "§8[ForgeUpgrade]";
     private static final String LEVEL_PREFIX = "§eВсе характеристики: §6+";
+    private static final int ARMAGEDDON_BONUS = 999999;
+
     private final NamespacedKey typeKey;
     private final NamespacedKey levelKey;
     private final AttributeUpgradeManager attributeUpgradeManager;
@@ -33,8 +35,8 @@ public final class UpgradeApplier {
                 || name.endsWith("_PICKAXE") || name.endsWith("_SHOVEL") || name.endsWith("_HOE")
                 || name.endsWith("_SPEAR")
                 || name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE") || name.endsWith("_LEGGINGS")
-                || name.endsWith("_BOOTS") || item.getType() == Material.TRIDENT || item.getType() == Material.BOW
-                || item.getType() == Material.CROSSBOW;
+                || name.endsWith("_BOOTS") || item.getType() == Material.TRIDENT
+                || item.getType() == Material.BOW || item.getType() == Material.CROSSBOW;
     }
 
     public UpgradeType getAppliedType(ItemStack item) {
@@ -75,23 +77,34 @@ public final class UpgradeApplier {
         String original = meta.hasDisplayName() ? meta.getDisplayName() : getVanillaName(item.getType());
         original = original.replaceAll("§[0-9A-FK-ORa-fk-or]", "");
         original = original.replaceAll("\\s+\\+(?:∞|\\d+)$", "").trim();
-        meta.setDisplayName(type.isInfinite() ? "§4☠ " + original + " §c+∞" : "§6⚒ " + original + " §e+" + type.getLevel());
+        meta.setDisplayName(type.isInfinite()
+                ? "§4☠ " + original + " §c+∞"
+                : "§6⚒ " + original + " §e+" + type.getLevel());
 
         List<String> lore = new ArrayList<>();
         if (meta.hasLore() && meta.getLore() != null) {
-            for (String line : meta.getLore()) if (!isForgeLore(line)) lore.add(line);
+            for (String line : meta.getLore()) {
+                if (!isForgeLore(line)) lore.add(line);
+            }
         }
+
         lore.add(MARKER);
-        lore.add(type.isInfinite() ? "§4Улучшение: §cАрмагедон" : "§6Улучшение: §e" + type.getDisplayName());
-        lore.add(type.isInfinite() ? "§cВсе характеристики: §l+99999" : LEVEL_PREFIX + type.getLevel());
+        lore.add(type.isInfinite()
+                ? "§4Улучшение: §cАрмагедон"
+                : "§6Улучшение: §e" + type.getDisplayName());
+        lore.add(type.isInfinite()
+                ? "§cВсе характеристики: §l+" + ARMAGEDDON_BONUS
+                : LEVEL_PREFIX + type.getLevel());
         lore.add("§8Новое улучшение заменяет предыдущее.");
         meta.setLore(lore);
     }
 
     private boolean isForgeLore(String line) {
-        return line != null && (line.equals(MARKER) || line.startsWith("§4Улучшение: §cАрмагедон")
-                || line.startsWith("§6Улучшение: §e") || line.startsWith(LEVEL_PREFIX)
-                || line.equals("§cВсе характеристики: §l+99999")
+        return line != null && (line.equals(MARKER)
+                || line.startsWith("§4Улучшение: §cАрмагедон")
+                || line.startsWith("§6Улучшение: §e")
+                || line.startsWith(LEVEL_PREFIX)
+                || line.equals("§cВсе характеристики: §l+" + ARMAGEDDON_BONUS)
                 || line.equals("§8Новое улучшение заменяет предыдущее."));
     }
 
