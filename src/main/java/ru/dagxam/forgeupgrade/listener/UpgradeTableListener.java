@@ -16,9 +16,11 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.inventory.PrepareSmithingEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.SmithingInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -32,11 +34,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Отдельный крафтовый Стол улучшений.
- * Внешне используется блок кузнечного стола, но обычные кузнечные столы полностью не затрагиваются.
- * Окно использует нативный интерфейс SMITHING: шаблон + предмет + материал -> результат.
- */
+/** Отдельный крафтовый Стол улучшений. Обычные кузнечные столы не изменяются. */
 public final class UpgradeTableListener implements Listener {
     private static final String TITLE = "§6Стол улучшений";
     private static final int TEMPLATE_SLOT = 0;
@@ -71,7 +69,6 @@ public final class UpgradeTableListener implements Listener {
     public void onBreak(BlockBreakEvent event) {
         String key = locationKey(event.getBlock().getLocation());
         if (!upgradeTables.remove(key)) return;
-
         event.setDropItems(false);
         event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), createUpgradeTableItem());
         saveTables();
@@ -82,26 +79,33 @@ public final class UpgradeTableListener implements Listener {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
         if (event.getClickedBlock().getType() != Material.SMITHING_TABLE) return;
         if (!upgradeTables.contains(locationKey(event.getClickedBlock().getLocation()))) return;
-
         event.setCancelled(true);
         open(event.getPlayer());
     }
 
     private void open(Player player) {
-        Inventory inventory = Bukkit.createInventory(null, InventoryType.SMITHING, TITLE);
-        player.openInventory(inventory);
+        player.openInventory(Bukkit.createInventory(null, InventoryType.SMITHING, TITLE));
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    /**
+     * Главное исправление: нативный кузнечный инвентарь сам пересчитывает и очищает результат.
+     * Поэтому результат создаётся именно через PrepareSmithingEvent и SmithingInventory#setResult().
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPrepareSmithing(PrepareSmithingEvent event) {
+        if (!TITLE.equals(event.getView().getTitle())) return;
+        updateResult(event.getInventory());
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onClick(InventoryClickEvent event) {
         if (!isUpgradeTable(event)) return;
-
         int raw = event.getRawSlot();
         Inventory top = event.getView().getTopInventory();
 
         if (raw == RESULT_SLOT) {
             event.setCancelled(true);
-            takeResult(event, top);
+            takeResult(event, (SmithingInventory) top);
             return;
         }
 
@@ -114,14 +118,14 @@ public final class UpgradeTableListener implements Listener {
                 event.setCancelled(true);
                 return;
             }
-            scheduleUpdate(top);
+            scheduleUpdate((SmithingInventory) top);
             return;
         }
 
         if (event.isShiftClick()) event.setCancelled(true);
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler
     public void onDrag(InventoryDragEvent event) {
         if (!isUpgradeTable(event)) return;
         for (int raw : event.getRawSlots()) {
@@ -131,14 +135,14 @@ public final class UpgradeTableListener implements Listener {
                 return;
             }
         }
-        scheduleUpdate(event.getView().getTopInventory());
+        scheduleUpdate((SmithingInventory) event.getView().getTopInventory());
     }
 
-    private void scheduleUpdate(Inventory inventory) {
+    private void scheduleUpdate(SmithingInventory inventory) {
         Bukkit.getScheduler().runTask(plugin, () -> updateResult(inventory));
     }
 
-    private void updateResult(Inventory inventory) {
+    private void updateResult(SmithingInventory inventory) {
         ItemStack template = inventory.getItem(TEMPLATE_SLOT);
         ItemStack target = inventory.getItem(TARGET_SLOT);
         ItemStack material = inventory.getItem(MATERIAL_SLOT);
@@ -148,17 +152,20 @@ public final class UpgradeTableListener implements Listener {
                 || material == null || material.getType() != type.getSmithingMaterial()
                 || !upgradeApplier.isSupported(target)
                 || upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
-            inventory.setItem(RESULT_SLOT, null);
+            inventory.setResult(null);
             return;
         }
 
         ItemStack result = target.clone();
-        if (upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS) inventory.setItem(RESULT_SLOT, result);
-        else inventory.setItem(RESULT_SLOT, null);
+        if (upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS) {
+            inventory.setResult(result);
+        } else {
+            inventory.setResult(null);
+        }
     }
 
-    private void takeResult(InventoryClickEvent event, Inventory inventory) {
-        ItemStack result = inventory.getItem(RESULT_SLOT);
+    private void takeResult(InventoryClickEvent event, SmithingInventory inventory) {
+        ItemStack result = inventory.getResult();
         if (result == null || result.getType().isAir()) return;
         if (event.getCursor() != null && !event.getCursor().getType().isAir()) return;
 
@@ -172,8 +179,8 @@ public final class UpgradeTableListener implements Listener {
         consumeOne(inventory, TEMPLATE_SLOT);
         consumeOne(inventory, TARGET_SLOT);
         consumeOne(inventory, MATERIAL_SLOT);
+        inventory.setResult(null);
         event.setCursor(result);
-        inventory.setItem(RESULT_SLOT, null);
         scheduleUpdate(inventory);
 
         if (event.getWhoClicked() instanceof Player player) {
