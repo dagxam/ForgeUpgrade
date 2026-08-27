@@ -13,8 +13,7 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
 /** Компактный цифровой HUD реального здоровья и брони для любого улучшения. */
 public final class UpgradeStatusHudListener {
-    // Очень маленькая визуальная шкала: реальные сотни тысяч HP остаются настоящими,
-    // но огромные столбцы сердец больше не закрывают экран. Точные значения выводятся цифрами.
+    // Реальное здоровье остаётся настоящим, но огромные столбцы сердец не закрывают экран.
     private static final double COMPACT_HEALTH_SCALE = 0.1D;
 
     private final JavaPlugin plugin;
@@ -38,25 +37,30 @@ public final class UpgradeStatusHudListener {
     private void update(Player player) {
         UpgradeType visualType = getHighestArmorUpgrade(player);
         if (visualType == null) {
-            // Если улучшенную броню сняли, возвращаем обычный HUD Minecraft.
             if (player.isHealthScaled()) player.setHealthScaled(false);
             return;
         }
 
-        // Убираем гигантскую стену из сердец при +10, +30 и особенно +999999.
-        // Реальное здоровье не изменяется: меняется только отображение на клиенте.
         player.setHealthScale(COMPACT_HEALTH_SCALE);
 
         AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.MAX_HEALTH);
         AttributeInstance armorAttribute = player.getAttribute(Attribute.ARMOR);
         double health = player.getHealth();
         double maxHealth = maxHealthAttribute == null ? 0.0D : maxHealthAttribute.getValue();
-        double armor = armorAttribute == null ? 0.0D : armorAttribute.getValue();
+        double actualArmor = armorAttribute == null ? 0.0D : armorAttribute.getValue();
+
+        // Считаем бонус прямо по каждому надетому улучшенному предмету.
+        // Поэтому цифры HUD всегда показывают полный прирост брони, даже если стандартная
+        // шкала Minecraft визуально ограничена и не умеет рисовать сотни тысяч значков.
+        int armorBonus = getArmorBonus(player);
+        double baseArmor = Math.max(0.0D, actualArmor - armorBonus);
+        double displayArmor = Math.max(actualArmor, baseArmor + armorBonus);
 
         String color = color(visualType);
         String name = visualType.getDisplayName();
         String message = color + "❤ " + format(health) + "§7/" + color + format(maxHealth)
-                + "    " + color + "🛡 " + format(armor)
+                + "    " + color + "🛡 " + format(displayArmor)
+                + " §7(+" + color + format(armorBonus) + "§7)"
                 + "    §8[" + color + name + "§8]";
         player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message));
     }
@@ -71,13 +75,22 @@ public final class UpgradeStatusHudListener {
         return highest;
     }
 
+    private int getArmorBonus(Player player) {
+        int total = 0;
+        for (ItemStack item : player.getInventory().getArmorContents()) {
+            UpgradeType type = upgradeApplier.getAppliedType(item);
+            if (type != null) total += type.getAttributeBonus();
+        }
+        return total;
+    }
+
     private String color(UpgradeType type) {
         return switch (type) {
-            case GOLD -> "§6";        // золотой
-            case EMERALD -> "§a";     // зелёный / изумрудный
-            case DIAMOND -> "§b";     // голубой / алмазный
-            case NETHERITE -> "§6";   // оранжево-медный визуальный тон
-            case ARMAGEDDON -> "§c";  // ярко-красный
+            case GOLD -> "§6";
+            case EMERALD -> "§a";
+            case DIAMOND -> "§b";
+            case NETHERITE -> "§6";
+            case ARMAGEDDON -> "§c";
         };
     }
 
