@@ -31,8 +31,8 @@ public final class ForgeUpgrade extends JavaPlugin {
         new RecipeManager(this, upgradeManager).registerRecipes();
         getServer().getPluginManager().registerEvents(new UpgradeTableListener(this, upgradeManager, upgradeApplier), this);
 
-        // Ванильный кузнечный стол намеренно не перехватывается и работает полностью по стандарту.
-        getServer().getPluginManager().registerEvents(new UpgradeAttributeListener(), this);
+        // Обычный кузнечный стол не перехватывается и работает полностью по стандарту.
+        getServer().getPluginManager().registerEvents(new UpgradeAttributeListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonArmorListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonWeaponListener(this, upgradeApplier), this);
 
