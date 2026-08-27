@@ -23,10 +23,14 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Способности Армагедона для незеритовой брони.
- * Проверка выполняется раз в секунду. Плагин не снимает чужие эффекты игрока.
+ * Способности улучшенной незеритовой и Армагедон-брони.
+ * Проверка выполняется раз в секунду, а длительные эффекты обновляются заранее,
+ * поэтому ночное зрение не доходит до мигающего окончания действия.
  */
 public final class ArmageddonArmorListener implements Listener {
+    private static final int EFFECT_DURATION = 2400; // 2 минуты
+    private static final int EFFECT_REFRESH_AT = 1200; // обновить за минуту до окончания
+
     private final JavaPlugin plugin;
     private final UpgradeApplier upgradeApplier;
     private final Set<UUID> pluginFlight = new HashSet<>();
@@ -46,7 +50,7 @@ public final class ArmageddonArmorListener implements Listener {
         }.runTaskTimer(plugin, 20L, 20L);
     }
 
-    private boolean hasArmageddon(Player player, Material material) {
+    private UpgradeType getUpgrade(Player player, Material material) {
         ItemStack item = switch (material) {
             case NETHERITE_HELMET -> player.getInventory().getHelmet();
             case NETHERITE_CHESTPLATE -> player.getInventory().getChestplate();
@@ -54,8 +58,26 @@ public final class ArmageddonArmorListener implements Listener {
             case NETHERITE_BOOTS -> player.getInventory().getBoots();
             default -> null;
         };
-        return item != null && item.getType() == material
-                && upgradeApplier.getAppliedType(item) == UpgradeType.ARMAGEDDON;
+        if (item == null || item.getType() != material) return null;
+        return upgradeApplier.getAppliedType(item);
+    }
+
+    private boolean hasArmageddon(Player player, Material material) {
+        return getUpgrade(player, material) == UpgradeType.ARMAGEDDON;
+    }
+
+    private boolean hasHealthRegenerationArmor(Player player) {
+        Material[] armor = {
+                Material.NETHERITE_HELMET,
+                Material.NETHERITE_CHESTPLATE,
+                Material.NETHERITE_LEGGINGS,
+                Material.NETHERITE_BOOTS
+        };
+        for (Material material : armor) {
+            UpgradeType type = getUpgrade(player, material);
+            if (type == UpgradeType.NETHERITE || type == UpgradeType.ARMAGEDDON) return true;
+        }
+        return false;
     }
 
     private void updatePlayer(Player player) {
@@ -64,12 +86,18 @@ public final class ArmageddonArmorListener implements Listener {
         boolean leggings = hasArmageddon(player, Material.NETHERITE_LEGGINGS);
         boolean boots = hasArmageddon(player, Material.NETHERITE_BOOTS);
 
-        // Короткие эффекты просто перестают обновляться после снятия брони.
-        // Это не удаляет эффекты, выданные другими плагинами или зельями.
-        if (helmet) giveEffect(player, PotionEffectType.NIGHT_VISION, 60, 0);
+        // Армагедон-шлем: стабильное ночное зрение без мигания.
+        if (helmet) giveStableEffect(player, PotionEffectType.NIGHT_VISION, 0);
+
+        // Любая надетая незеритовая или Армагедон-броня с соответствующим улучшением
+        // даёт постоянное восстановление здоровья.
+        if (hasHealthRegenerationArmor(player)) {
+            giveStableEffect(player, PotionEffectType.REGENERATION, 0);
+        }
+
         if (boots) {
-            giveEffect(player, PotionEffectType.JUMP_BOOST, 60, 1);
-            giveEffect(player, PotionEffectType.SPEED, 60, 0);
+            giveStableEffect(player, PotionEffectType.JUMP_BOOST, 1);
+            giveStableEffect(player, PotionEffectType.SPEED, 0);
         }
 
         UUID id = player.getUniqueId();
@@ -90,10 +118,20 @@ public final class ArmageddonArmorListener implements Listener {
         }
     }
 
-    private void giveEffect(Player player, PotionEffectType type, int duration, int amplifier) {
+    private void giveStableEffect(Player player, PotionEffectType type, int amplifier) {
         PotionEffect current = player.getPotionEffect(type);
-        if (current != null && current.getDuration() > duration / 2 && current.getAmplifier() >= amplifier) return;
-        player.addPotionEffect(new PotionEffect(type, duration, amplifier, true, false, false));
+        if (current != null && current.getAmplifier() >= amplifier
+                && current.getDuration() > EFFECT_REFRESH_AT) {
+            return;
+        }
+        player.addPotionEffect(new PotionEffect(
+                type,
+                EFFECT_DURATION,
+                amplifier,
+                true,
+                false,
+                false
+        ), true);
     }
 
     @EventHandler
