@@ -16,12 +16,16 @@ import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
+import java.util.Map;
+
 /** Способности Армагедона для оружия и дальнобойных предметов. */
 public final class ArmageddonWeaponListener implements Listener {
+    private final JavaPlugin plugin;
     private final UpgradeApplier upgradeApplier;
     private final NamespacedKey projectileKey;
 
     public ArmageddonWeaponListener(JavaPlugin plugin, UpgradeApplier upgradeApplier) {
+        this.plugin = plugin;
         this.upgradeApplier = upgradeApplier;
         this.projectileKey = new NamespacedKey(plugin, "armageddon_projectile");
     }
@@ -31,7 +35,8 @@ public final class ArmageddonWeaponListener implements Listener {
     }
 
     private boolean isMeleeWeapon(Material material) {
-        return material.name().endsWith("_SWORD") || material.name().endsWith("_AXE") || material == Material.TRIDENT;
+        return material.name().endsWith("_SWORD") || material.name().endsWith("_AXE")
+                || material.name().endsWith("_SPEAR") || material == Material.TRIDENT;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -54,11 +59,31 @@ public final class ArmageddonWeaponListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onShoot(EntityShootBowEvent event) {
-        if (!(event.getEntity() instanceof Player)) return;
+        if (!(event.getEntity() instanceof Player player)) return;
         if (!(event.getProjectile() instanceof AbstractArrow arrow)) return;
         if (!isArmageddon(event.getBow())) return;
 
         arrow.getPersistentDataContainer().set(projectileKey, PersistentDataType.BYTE, (byte) 1);
-        event.setConsumeItem(false);
+
+        // В API 26.2 старый setConsumeItem устарел и больше не является надёжным.
+        // Поэтому после фактического выстрела возвращаем ровно одну использованную стрелу.
+        ItemStack consumed = event.getConsumable();
+        if (consumed != null && event.shouldConsumeItem()) {
+            restoreOneArrow(player, consumed);
+        } else if (event.getBow() != null && event.getBow().getType() == Material.CROSSBOW) {
+            // Арбалет расходует стрелу при зарядке, а не при самом выстреле.
+            // После выстрела возвращаем одну стрелу, поэтому одна стрела становится бесконечной.
+            restoreOneArrow(player, new ItemStack(Material.ARROW));
+        }
+    }
+
+    private void restoreOneArrow(Player player, ItemStack source) {
+        ItemStack returned = source.clone();
+        returned.setAmount(1);
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            Map<Integer, ItemStack> left = player.getInventory().addItem(returned);
+            left.values().forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
+            player.updateInventory();
+        });
     }
 }
