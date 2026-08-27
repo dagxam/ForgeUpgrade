@@ -17,6 +17,7 @@ import java.util.List;
 public final class UpgradeApplier {
     private static final String MARKER = "§8[ForgeUpgrade]";
     private static final String LEVEL_PREFIX = "§eВсе характеристики: §6+";
+    private static final String ARMOR_PREFIX = "§bБроня: §f+";
     private static final String TOOL_EFFICIENCY_PREFIX = "§bСкорость работы: §fЭффективность ";
     private static final int ARMAGEDDON_BONUS = 999999;
 
@@ -75,12 +76,7 @@ public final class UpgradeApplier {
         item.setItemMeta(meta);
 
         attributeUpgradeManager.apply(item, next, next.getLevel());
-
-        // ВАЖНО: раньше менеджер отделки передавался в конструктор, но вообще не вызывался.
-        // Поэтому броня сохраняла обычный цвет. Теперь цветная отделка применяется всегда.
         armorTrimUpgradeManager.apply(item, next);
-
-        // Армагеддон получает постоянный магический блеск на оружии, инструментах и броне.
         applyArmageddonVisual(item, next);
         return Result.SUCCESS;
     }
@@ -116,6 +112,9 @@ public final class UpgradeApplier {
         lore.add(type.isInfinite()
                 ? "§cВсе характеристики: §l+" + ARMAGEDDON_BONUS
                 : LEVEL_PREFIX + type.getLevel());
+        if (isArmor(item.getType())) {
+            lore.add(ARMOR_PREFIX + type.getAttributeBonus());
+        }
         if (isMiningTool(item.getType())) {
             lore.add(TOOL_EFFICIENCY_PREFIX + type.getToolEfficiency());
         }
@@ -128,9 +127,16 @@ public final class UpgradeApplier {
                 || line.startsWith("§4Улучшение: §cАрмагедон")
                 || line.startsWith("§6Улучшение: §e")
                 || line.startsWith(LEVEL_PREFIX)
+                || line.startsWith(ARMOR_PREFIX)
                 || line.startsWith(TOOL_EFFICIENCY_PREFIX)
                 || line.equals("§cВсе характеристики: §l+" + ARMAGEDDON_BONUS)
                 || line.equals("§8Новое улучшение заменяет предыдущее."));
+    }
+
+    private boolean isArmor(Material material) {
+        String name = material.name();
+        return name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE")
+                || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
     }
 
     private boolean isMiningTool(Material material) {
