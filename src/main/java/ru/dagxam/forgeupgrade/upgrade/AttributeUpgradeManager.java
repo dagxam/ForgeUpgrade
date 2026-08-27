@@ -53,24 +53,26 @@ public final class AttributeUpgradeManager {
     }
 
     private void addBonuses(ItemMeta meta, Material material, int bonus) {
-        if (isArmor(material)) {
-            add(meta, Attribute.ARMOR, armorKey, bonus);
-            add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, bonus);
-            add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, bonus);
+        EquipmentSlotGroup armorSlot = getArmorSlot(material);
+        if (armorSlot != null) {
+            add(meta, Attribute.ARMOR, armorKey, bonus, armorSlot);
+            add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, bonus, armorSlot);
+            add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, bonus, armorSlot);
         }
 
         if (hasCombatAttributes(material)) {
-            add(meta, Attribute.ATTACK_DAMAGE, damageKey, bonus);
-            add(meta, Attribute.ATTACK_SPEED, speedKey, bonus);
+            // Урон и скорость должны работать только при реальном использовании предмета в основной руке.
+            add(meta, Attribute.ATTACK_DAMAGE, damageKey, bonus, EquipmentSlotGroup.MAINHAND);
+            add(meta, Attribute.ATTACK_SPEED, speedKey, bonus, EquipmentSlotGroup.MAINHAND);
         }
     }
 
-    private void add(ItemMeta meta, Attribute attribute, NamespacedKey key, double amount) {
+    private void add(ItemMeta meta, Attribute attribute, NamespacedKey key, double amount, EquipmentSlotGroup slot) {
         meta.addAttributeModifier(attribute, new AttributeModifier(
                 key,
                 amount,
                 AttributeModifier.Operation.ADD_NUMBER,
-                EquipmentSlotGroup.ANY
+                slot
         ));
     }
 
@@ -93,10 +95,13 @@ public final class AttributeUpgradeManager {
                 || key.equals(damageKey) || key.equals(speedKey);
     }
 
-    private boolean isArmor(Material material) {
+    private EquipmentSlotGroup getArmorSlot(Material material) {
         String name = material.name();
-        return name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE")
-                || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
+        if (name.endsWith("_HELMET")) return EquipmentSlotGroup.HEAD;
+        if (name.endsWith("_CHESTPLATE")) return EquipmentSlotGroup.CHEST;
+        if (name.endsWith("_LEGGINGS")) return EquipmentSlotGroup.LEGS;
+        if (name.endsWith("_BOOTS")) return EquipmentSlotGroup.FEET;
+        return null;
     }
 
     private boolean hasCombatAttributes(Material material) {
