@@ -24,6 +24,7 @@ public final class AttributeUpgradeManager {
     private final NamespacedKey armorKey;
     private final NamespacedKey toughnessKey;
     private final NamespacedKey knockbackKey;
+    private final NamespacedKey maxHealthKey;
     private final NamespacedKey damageKey;
     private final NamespacedKey speedKey;
     private final NamespacedKey originalEfficiencyKey;
@@ -34,6 +35,7 @@ public final class AttributeUpgradeManager {
         armorKey = new NamespacedKey(plugin, "bonus_armor");
         toughnessKey = new NamespacedKey(plugin, "bonus_armor_toughness");
         knockbackKey = new NamespacedKey(plugin, "bonus_knockback_resistance");
+        maxHealthKey = new NamespacedKey(plugin, "bonus_max_health");
         damageKey = new NamespacedKey(plugin, "bonus_attack_damage");
         speedKey = new NamespacedKey(plugin, "bonus_attack_speed");
         originalEfficiencyKey = new NamespacedKey(plugin, "original_efficiency_level");
@@ -51,21 +53,26 @@ public final class AttributeUpgradeManager {
         data.set(markerKey, PersistentDataType.STRING, type.getId());
         data.set(levelKey, PersistentDataType.INTEGER, bonus);
 
-        if (bonus > 0) addBonuses(meta, item.getType(), bonus);
+        if (bonus > 0) addBonuses(meta, item.getType(), bonus, type);
         applyToolEfficiency(meta, item.getType(), type);
         item.setItemMeta(meta);
     }
 
-    private void addBonuses(ItemMeta meta, Material material, int bonus) {
+    private void addBonuses(ItemMeta meta, Material material, int bonus, UpgradeType type) {
         EquipmentSlotGroup armorSlot = getArmorSlot(material);
         if (armorSlot != null) {
             add(meta, Attribute.ARMOR, armorKey, bonus, armorSlot);
             add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, bonus, armorSlot);
             add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, bonus, armorSlot);
+
+            // Исправление: у брони Армагедона реально увеличивается максимум здоровья.
+            // Специальный бонус здоровья добавляется именно для уровня Армагеддон.
+            if (type == UpgradeType.ARMAGEDDON) {
+                add(meta, Attribute.MAX_HEALTH, maxHealthKey, bonus, armorSlot);
+            }
         }
 
         if (hasCombatAttributes(material)) {
-            // Урон и скорость атаки работают при реальном использовании предмета в основной руке.
             add(meta, Attribute.ATTACK_DAMAGE, damageKey, bonus, EquipmentSlotGroup.MAINHAND);
             add(meta, Attribute.ATTACK_SPEED, speedKey, bonus, EquipmentSlotGroup.MAINHAND);
         }
@@ -87,9 +94,7 @@ public final class AttributeUpgradeManager {
         }
 
         int target = Math.max(original, type.getToolEfficiency());
-        if (target > 0) {
-            meta.addEnchant(Enchantment.EFFICIENCY, target, true);
-        }
+        if (target > 0) meta.addEnchant(Enchantment.EFFICIENCY, target, true);
     }
 
     private void add(ItemMeta meta, Attribute attribute, NamespacedKey key, double amount, EquipmentSlotGroup slot) {
@@ -110,14 +115,12 @@ public final class AttributeUpgradeManager {
                 if (isForgeKey(modifier.getKey())) removals.add(new Removal(entry.getKey(), modifier));
             }
         }
-        for (Removal removal : removals) {
-            meta.removeAttributeModifier(removal.attribute(), removal.modifier());
-        }
+        for (Removal removal : removals) meta.removeAttributeModifier(removal.attribute(), removal.modifier());
     }
 
     private boolean isForgeKey(NamespacedKey key) {
         return key.equals(armorKey) || key.equals(toughnessKey) || key.equals(knockbackKey)
-                || key.equals(damageKey) || key.equals(speedKey);
+                || key.equals(maxHealthKey) || key.equals(damageKey) || key.equals(speedKey);
     }
 
     private EquipmentSlotGroup getArmorSlot(Material material) {
