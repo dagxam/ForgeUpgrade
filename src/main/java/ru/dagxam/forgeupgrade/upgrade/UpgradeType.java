@@ -2,13 +2,13 @@ package ru.dagxam.forgeupgrade.upgrade;
 
 import org.bukkit.Material;
 
-/** Типы улучшений и их реальные шаблоны/материалы для стола кузнеца. */
+/** Типы улучшений и их реальные шаблоны/материалы для стола улучшений. */
 public enum UpgradeType {
     GOLD("gold", "Золотое улучшение", 10, Material.DUNE_ARMOR_TRIM_SMITHING_TEMPLATE, Material.GOLD_INGOT),
     EMERALD("emerald", "Изумрудное улучшение", 30, Material.TIDE_ARMOR_TRIM_SMITHING_TEMPLATE, Material.EMERALD),
     DIAMOND("diamond", "Алмазное улучшение", 50, Material.FLOW_ARMOR_TRIM_SMITHING_TEMPLATE, Material.DIAMOND),
     NETHERITE("netherite", "Незеритовое улучшение", 70, Material.WARD_ARMOR_TRIM_SMITHING_TEMPLATE, Material.NETHERITE_INGOT),
-    ARMAGEDDON("armageddon", "Армагедон", 99999, Material.RIB_ARMOR_TRIM_SMITHING_TEMPLATE, Material.NETHER_STAR);
+    ARMAGEDDON("armageddon", "Армагедон", 999999, Material.RIB_ARMOR_TRIM_SMITHING_TEMPLATE, Material.NETHER_STAR);
 
     private final String id;
     private final String displayName;
@@ -32,7 +32,7 @@ public enum UpgradeType {
     public boolean requiresSmithingTemplate() { return true; }
     public boolean isInfinite() { return this == ARMAGEDDON; }
 
-    /** Внутренний безопасный лимит Армагедона вместо настоящей бесконечности. */
+    /** Безопасный конечный бонус Армагедона: +999999 ко всем поддерживаемым характеристикам. */
     public int getAttributeBonus() { return level; }
 
     public static UpgradeType fromId(String id) {
