@@ -11,9 +11,11 @@ import org.bukkit.scheduler.BukkitRunnable;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
-/** Компактный цифровой HUD реального здоровья и брони для любого улучшения. */
+/** Стандартные сердца Minecraft + компактные числовые бонусы здоровья и брони над хотбаром. */
 public final class UpgradeStatusHudListener {
-    private static final double COMPACT_HEALTH_SCALE = 0.1D;
+    private static final double STANDARD_HEALTH_SCALE = 20.0D;
+    private static final String HEARTS = "❤❤❤❤❤❤❤❤❤❤";
+    private static final String SHIELDS = "🛡🛡🛡🛡🛡🛡🛡🛡🛡🛡";
 
     private final JavaPlugin plugin;
     private final UpgradeApplier upgradeApplier;
@@ -30,12 +32,11 @@ public final class UpgradeStatusHudListener {
             public void run() {
                 for (Player player : plugin.getServer().getOnlinePlayers()) update(player);
             }
-        }.runTaskTimer(plugin, 10L, 10L);
+        }.runTaskTimer(plugin, 1L, 2L);
     }
 
     private void update(Player player) {
-        // Автоматически переносим старую улучшенную броню на исправленные уникальные
-        // модификаторы слотов. Поэтому после обновления плагина не нужно заново улучшать броню.
+        // Автоматически переносим старую улучшенную броню на исправленные уникальные модификаторы.
         for (ItemStack item : player.getInventory().getArmorContents()) {
             upgradeApplier.refreshAttributes(item);
         }
@@ -46,25 +47,24 @@ public final class UpgradeStatusHudListener {
             return;
         }
 
-        player.setHealthScale(COMPACT_HEALTH_SCALE);
+        // Всегда оставляем ровно стандартные 10 визуальных сердец, независимо от огромного MAX_HEALTH.
+        player.setHealthScaled(true);
+        player.setHealthScale(STANDARD_HEALTH_SCALE);
 
         AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.MAX_HEALTH);
         AttributeInstance armorAttribute = player.getAttribute(Attribute.ARMOR);
-        double health = player.getHealth();
-        double maxHealth = maxHealthAttribute == null ? 0.0D : maxHealthAttribute.getValue();
+        double maxHealth = maxHealthAttribute == null ? 20.0D : maxHealthAttribute.getValue();
         double actualArmor = armorAttribute == null ? 0.0D : armorAttribute.getValue();
 
-        // Стандартная шкала Minecraft ограничена визуально. Полный бонус выводим цифрами.
         int armorBonus = getArmorBonus(player);
+        double healthBonus = Math.max(0.0D, maxHealth - 20.0D);
         double baseArmor = Math.max(0.0D, actualArmor - armorBonus);
-        double displayArmor = Math.max(actualArmor, baseArmor + armorBonus);
+        double totalArmorBonus = Math.max(0.0D, actualArmor - baseArmor);
 
         String color = color(visualType);
-        String name = visualType.getDisplayName();
-        String message = color + "❤ " + format(health) + "§7/" + color + format(maxHealth)
-                + "    " + color + "🛡 " + format(displayArmor)
-                + " §7(+" + color + format(armorBonus) + "§7)"
-                + "    §8[" + color + name + "§8]";
+        String message = color + HEARTS + " §f+" + color + format(healthBonus)
+                + "    " + color + SHIELDS + " §f+" + color + format(totalArmorBonus)
+                + "    §8[" + color + visualType.getDisplayName() + "§8]";
         player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message));
     }
 
