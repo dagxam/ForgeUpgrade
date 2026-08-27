@@ -8,9 +8,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockDamageEvent;
-import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -18,10 +18,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
-/**
- * Дополнительные способности Армагедона.
- * Они работают только у НEЗЕРИТОВЫХ инструментов с улучшением ARMAGEDDON.
- */
+/** Дополнительные способности Армагедона только для незеритовых инструментов. */
 public final class ArmageddonToolListener implements Listener {
     private final JavaPlugin plugin;
     private final UpgradeApplier upgradeApplier;
@@ -40,20 +37,17 @@ public final class ArmageddonToolListener implements Listener {
     public void onBlockDamage(BlockDamageEvent event) {
         Player player = event.getPlayer();
         ItemStack tool = event.getItemInHand();
-        Material type = tool.getType();
 
         if (isArmageddonNetherite(tool, Material.NETHERITE_PICKAXE)) {
             event.setCancelled(true);
             breakBlocks(player, tool, event.getBlock(), 2);
             return;
         }
-
         if (isArmageddonNetherite(tool, Material.NETHERITE_AXE)) {
             event.setCancelled(true);
             breakBlocks(player, tool, event.getBlock(), 1);
             return;
         }
-
         if (isArmageddonNetherite(tool, Material.NETHERITE_SHOVEL)) {
             event.setCancelled(true);
             breakBlocks(player, tool, event.getBlock(), 3);
@@ -65,15 +59,11 @@ public final class ArmageddonToolListener implements Listener {
         BlockFace direction = getHorizontalFacing(player);
         for (int i = 0; i < count; i++) {
             Block block = first.getRelative(direction, i);
-            if (block.getType().isAir()) continue;
-            forceBreak(player, tool, block);
+            if (!block.getType().isAir()) forceBreak(player, tool, block);
         }
     }
 
-    /**
-     * Кирка Армагедона ломает любой блок с одного удара, включая BEDROCK.
-     * Сначала вызывается обычный BlockBreakEvent, поэтому отменённые защитными плагинами блоки не ломаются.
-     */
+    /** Кирка Армагедона ломает любой блок с одного удара, включая BEDROCK. */
     private void forceBreak(Player player, ItemStack tool, Block block) {
         BlockBreakEvent breakEvent = new BlockBreakEvent(block, player);
         plugin.getServer().getPluginManager().callEvent(breakEvent);
@@ -81,10 +71,9 @@ public final class ArmageddonToolListener implements Listener {
 
         if (block.getType() == Material.BEDROCK) {
             block.setType(Material.AIR);
-            return;
+        } else {
+            block.breakNaturally(tool);
         }
-
-        block.breakNaturally(tool);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -126,11 +115,15 @@ public final class ArmageddonToolListener implements Listener {
                 || type == Material.DIRT_PATH;
     }
 
-    /** Быстрый рост: несколько мгновенных попыток удобрить растения над обработанными грядками. */
+    /** Быстрый рост: после обработки ускоряются растения в зоне 3x3 вокруг каждой новой грядки. */
     private void triggerFastGrowth(Block farmland) {
-        Block plant = farmland.getRelative(BlockFace.UP);
-        for (int i = 0; i < 3; i++) {
-            if (!plant.applyBoneMeal(BlockFace.UP)) break;
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                Block plant = farmland.getRelative(x, 1, z);
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    if (!plant.applyBoneMeal(BlockFace.UP)) break;
+                }
+            }
         }
         farmland.getWorld().spawnParticle(Particle.HAPPY_VILLAGER,
                 farmland.getLocation().add(0.5D, 1.0D, 0.5D), 8, 0.35D, 0.25D, 0.35D, 0.01D);
