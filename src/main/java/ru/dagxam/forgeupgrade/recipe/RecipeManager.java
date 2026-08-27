@@ -2,12 +2,14 @@ package ru.dagxam.forgeupgrade.recipe;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeManager;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
-/** Регистрирует точные рецепты кузнечных шаблонов ForgeUpgrade. */
+/** Регистрирует рецепты ForgeUpgrade. */
 public final class RecipeManager {
     private final JavaPlugin plugin;
     private final UpgradeManager upgradeManager;
@@ -18,6 +20,7 @@ public final class RecipeManager {
     }
 
     public void registerRecipes() {
+        registerUpgradeTableRecipe();
         registerFrameRecipe(UpgradeType.GOLD, Material.GOLD_INGOT);
         registerFrameRecipe(UpgradeType.EMERALD, Material.EMERALD);
         registerFrameRecipe(UpgradeType.DIAMOND, Material.DIAMOND);
@@ -26,8 +29,29 @@ public final class RecipeManager {
     }
 
     /**
-     * XXX / XBX / XXX — 8 материалов вокруг бумаги.
+     * Изумруд | Алмаз | Незеритовый слиток
+     * Доски    | Доски | Доски
+     * Доски    | Доски | Доски
      */
+    private void registerUpgradeTableRecipe() {
+        NamespacedKey key = new NamespacedKey(plugin, "upgrade_table");
+        ItemStack result = new ItemStack(Material.SMITHING_TABLE);
+        ItemMeta meta = result.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName("§6Стол улучшений");
+            result.setItemMeta(meta);
+        }
+
+        ShapedRecipe recipe = new ShapedRecipe(key, result);
+        recipe.shape("EDN", "PPP", "PPP");
+        recipe.setIngredient('E', Material.EMERALD);
+        recipe.setIngredient('D', Material.DIAMOND);
+        recipe.setIngredient('N', Material.NETHERITE_INGOT);
+        recipe.setIngredient('P', Material.OAK_PLANKS);
+        plugin.getServer().addRecipe(recipe);
+    }
+
+    /** XXX / XBX / XXX — 8 материалов вокруг бумаги. */
     private void registerFrameRecipe(UpgradeType type, Material material) {
         NamespacedKey key = new NamespacedKey(plugin, type.getId() + "_upgrade_template");
         ShapedRecipe recipe = new ShapedRecipe(key, upgradeManager.createUpgrade(type));
@@ -37,11 +61,7 @@ public final class RecipeManager {
         plugin.getServer().addRecipe(recipe);
     }
 
-    /**
-     * М Ж З
-     * Л Б Р
-     * И А Н
-     */
+    /** М Ж З / Л Б Р / И А Н */
     private void registerArmageddonRecipe() {
         NamespacedKey key = new NamespacedKey(plugin, "armageddon_upgrade_template");
         ShapedRecipe recipe = new ShapedRecipe(key, upgradeManager.createUpgrade(UpgradeType.ARMAGEDDON));
