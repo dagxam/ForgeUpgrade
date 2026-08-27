@@ -15,9 +15,9 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -81,8 +81,6 @@ public final class UpgradeTableListener implements Listener {
     public void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
         if (event.getClickedBlock().getType() != Material.SMITHING_TABLE) return;
-
-        // Обычный кузнечный стол не меняем вообще.
         if (!upgradeTables.contains(locationKey(event.getClickedBlock().getLocation()))) return;
 
         event.setCancelled(true);
@@ -120,7 +118,6 @@ public final class UpgradeTableListener implements Listener {
             return;
         }
 
-        // Запрещаем shift-click из инвентаря игрока, чтобы Bukkit не применил ванильные ограничения.
         if (event.isShiftClick()) event.setCancelled(true);
     }
 
@@ -156,11 +153,8 @@ public final class UpgradeTableListener implements Listener {
         }
 
         ItemStack result = target.clone();
-        if (upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS) {
-            inventory.setItem(RESULT_SLOT, result);
-        } else {
-            inventory.setItem(RESULT_SLOT, null);
-        }
+        if (upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS) inventory.setItem(RESULT_SLOT, result);
+        else inventory.setItem(RESULT_SLOT, null);
     }
 
     private void takeResult(InventoryClickEvent event, Inventory inventory) {
@@ -209,18 +203,15 @@ public final class UpgradeTableListener implements Listener {
     }
 
     private boolean isUpgradeTable(InventoryClickEvent event) {
-        return event.getView().getTopInventory().getType() == InventoryType.SMITHING
-                && TITLE.equals(event.getView().getTitle());
+        return event.getView().getTopInventory().getType() == InventoryType.SMITHING && TITLE.equals(event.getView().getTitle());
     }
 
     private boolean isUpgradeTable(InventoryDragEvent event) {
-        return event.getView().getTopInventory().getType() == InventoryType.SMITHING
-                && TITLE.equals(event.getView().getTitle());
+        return event.getView().getTopInventory().getType() == InventoryType.SMITHING && TITLE.equals(event.getView().getTitle());
     }
 
     private boolean isUpgradeTable(InventoryCloseEvent event) {
-        return event.getInventory().getType() == InventoryType.SMITHING
-                && TITLE.equals(event.getView().getTitle());
+        return event.getInventory().getType() == InventoryType.SMITHING && TITLE.equals(event.getView().getTitle());
     }
 
     private boolean isUpgradeTableItem(ItemStack item) {
