@@ -47,14 +47,16 @@ public final class UpgradeApplier {
         return type == null ? 0 : type.getLevel();
     }
 
+    /**
+     * Любое улучшение можно применить сразу к обычному предмету.
+     * Не требуется проходить цепочку +10 -> +30 -> +50 -> +70.
+     * Новое улучшение полностью заменяет предыдущее, если это другой тип.
+     */
     public Result validate(ItemStack item, UpgradeType next) {
         if (!isSupported(item) || next == null) return Result.UNSUPPORTED;
         UpgradeType current = getAppliedType(item);
         if (current == next) return Result.ALREADY_APPLIED;
-        if (current == null) return next == UpgradeType.GOLD ? Result.SUCCESS : Result.WRONG_ORDER;
-        if (current.isInfinite()) return Result.CANNOT_DOWNGRADE;
-        if (next.isInfinite()) return current == UpgradeType.NETHERITE ? Result.SUCCESS : Result.WRONG_ORDER;
-        return next.getLevel() > current.getLevel() ? Result.SUCCESS : Result.CANNOT_DOWNGRADE;
+        return Result.SUCCESS;
     }
 
     public Result apply(ItemStack item, UpgradeType next) {
@@ -69,7 +71,7 @@ public final class UpgradeApplier {
         updateDisplay(meta, item, next);
         item.setItemMeta(meta);
 
-        // Отделка брони больше не применяется к самому предмету: шаблон только задаёт тип улучшения.
+        // Шаблон используется только как тип улучшения. Ванильная отделка предмету не добавляется.
         attributeUpgradeManager.apply(item, next, next.getLevel());
         return Result.SUCCESS;
     }
