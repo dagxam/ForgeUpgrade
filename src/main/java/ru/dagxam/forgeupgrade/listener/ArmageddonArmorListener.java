@@ -2,6 +2,8 @@ package ru.dagxam.forgeupgrade.listener;
 
 import org.bukkit.GameMode;
 import org.bukkit.Material;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -22,14 +24,10 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Способности улучшенной незеритовой и Армагедон-брони.
- * Проверка выполняется раз в секунду, а длительные эффекты обновляются заранее,
- * поэтому ночное зрение не доходит до мигающего окончания действия.
- */
+/** Способности только улучшенной незеритовой и Армагедон-брони. */
 public final class ArmageddonArmorListener implements Listener {
-    private static final int EFFECT_DURATION = 2400; // 2 минуты
-    private static final int EFFECT_REFRESH_AT = 1200; // обновить за минуту до окончания
+    private static final int EFFECT_DURATION = 2400;
+    private static final int EFFECT_REFRESH_AT = 1200;
 
     private final JavaPlugin plugin;
     private final UpgradeApplier upgradeApplier;
@@ -66,6 +64,13 @@ public final class ArmageddonArmorListener implements Listener {
         return getUpgrade(player, material) == UpgradeType.ARMAGEDDON;
     }
 
+    private boolean hasAnyArmageddonArmor(Player player) {
+        return hasArmageddon(player, Material.NETHERITE_HELMET)
+                || hasArmageddon(player, Material.NETHERITE_CHESTPLATE)
+                || hasArmageddon(player, Material.NETHERITE_LEGGINGS)
+                || hasArmageddon(player, Material.NETHERITE_BOOTS);
+    }
+
     private boolean hasHealthRegenerationArmor(Player player) {
         Material[] armor = {
                 Material.NETHERITE_HELMET,
@@ -86,13 +91,20 @@ public final class ArmageddonArmorListener implements Listener {
         boolean leggings = hasArmageddon(player, Material.NETHERITE_LEGGINGS);
         boolean boots = hasArmageddon(player, Material.NETHERITE_BOOTS);
 
-        // Армагедон-шлем: стабильное ночное зрение без мигания.
         if (helmet) giveStableEffect(player, PotionEffectType.NIGHT_VISION, 0);
 
-        // Любая надетая незеритовая или Армагедон-броня с соответствующим улучшением
-        // даёт постоянное восстановление здоровья.
-        if (hasHealthRegenerationArmor(player)) {
-            giveStableEffect(player, PotionEffectType.REGENERATION, 0);
+        if (hasHealthRegenerationArmor(player)) giveStableEffect(player, PotionEffectType.REGENERATION, 0);
+
+        // После надевания брони Армагедона сразу заполняем увеличенный максимум здоровья.
+        // Это исправляет ситуацию, когда модификатор уже добавлен, но шкала жизни визуально остаётся старой.
+        if (hasAnyArmageddonArmor(player)) {
+            AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+            if (maxHealth != null) {
+                double max = maxHealth.getValue();
+                if (max > 0.0D && player.getHealth() < max) {
+                    player.setHealth(max);
+                }
+            }
         }
 
         if (boots) {
@@ -121,17 +133,8 @@ public final class ArmageddonArmorListener implements Listener {
     private void giveStableEffect(Player player, PotionEffectType type, int amplifier) {
         PotionEffect current = player.getPotionEffect(type);
         if (current != null && current.getAmplifier() >= amplifier
-                && current.getDuration() > EFFECT_REFRESH_AT) {
-            return;
-        }
-        player.addPotionEffect(new PotionEffect(
-                type,
-                EFFECT_DURATION,
-                amplifier,
-                true,
-                false,
-                false
-        ), true);
+                && current.getDuration() > EFFECT_REFRESH_AT) return;
+        player.addPotionEffect(new PotionEffect(type, EFFECT_DURATION, amplifier, true, false, false), true);
     }
 
     @EventHandler
