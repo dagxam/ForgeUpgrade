@@ -19,25 +19,15 @@ import java.util.Map;
 
 /** Реально изменяет характеристики предмета через AttributeModifier и улучшает скорость работы инструментов. */
 public final class AttributeUpgradeManager {
+    private final JavaPlugin plugin;
     private final NamespacedKey markerKey;
     private final NamespacedKey levelKey;
-    private final NamespacedKey armorKey;
-    private final NamespacedKey toughnessKey;
-    private final NamespacedKey knockbackKey;
-    private final NamespacedKey maxHealthKey;
-    private final NamespacedKey damageKey;
-    private final NamespacedKey speedKey;
     private final NamespacedKey originalEfficiencyKey;
 
     public AttributeUpgradeManager(JavaPlugin plugin) {
+        this.plugin = plugin;
         markerKey = new NamespacedKey(plugin, "attribute_upgrade");
         levelKey = new NamespacedKey(plugin, "attribute_upgrade_level");
-        armorKey = new NamespacedKey(plugin, "bonus_armor");
-        toughnessKey = new NamespacedKey(plugin, "bonus_armor_toughness");
-        knockbackKey = new NamespacedKey(plugin, "bonus_knockback_resistance");
-        maxHealthKey = new NamespacedKey(plugin, "bonus_max_health");
-        damageKey = new NamespacedKey(plugin, "bonus_attack_damage");
-        speedKey = new NamespacedKey(plugin, "bonus_attack_speed");
         originalEfficiencyKey = new NamespacedKey(plugin, "original_efficiency_level");
     }
 
@@ -61,18 +51,29 @@ public final class AttributeUpgradeManager {
     private void addBonuses(ItemMeta meta, Material material, int bonus, UpgradeType type) {
         EquipmentSlotGroup armorSlot = getArmorSlot(material);
         if (armorSlot != null) {
-            add(meta, Attribute.ARMOR, armorKey, bonus, armorSlot);
-            add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, bonus, armorSlot);
-            add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, bonus, armorSlot);
+            // Ключи модификаторов обязательно уникальны для каждого слота брони.
+            // Одинаковый ключ на шлеме, нагруднике, поножах и ботинках мог приводить
+            // к конфликту идентификаторов, из-за чего бонус отображался/применялся не полностью.
+            String suffix = switch (armorSlot) {
+                case HEAD -> "head";
+                case CHEST -> "chest";
+                case LEGS -> "legs";
+                case FEET -> "feet";
+                default -> "armor";
+            };
+
+            add(meta, Attribute.ARMOR, new NamespacedKey(plugin, "bonus_armor_" + suffix), bonus, armorSlot);
+            add(meta, Attribute.ARMOR_TOUGHNESS, new NamespacedKey(plugin, "bonus_armor_toughness_" + suffix), bonus, armorSlot);
+            add(meta, Attribute.KNOCKBACK_RESISTANCE, new NamespacedKey(plugin, "bonus_knockback_resistance_" + suffix), bonus, armorSlot);
 
             if (type == UpgradeType.ARMAGEDDON) {
-                add(meta, Attribute.MAX_HEALTH, maxHealthKey, bonus, armorSlot);
+                add(meta, Attribute.MAX_HEALTH, new NamespacedKey(plugin, "bonus_max_health_" + suffix), bonus, armorSlot);
             }
         }
 
         if (hasCombatAttributes(material)) {
-            add(meta, Attribute.ATTACK_DAMAGE, damageKey, bonus, EquipmentSlotGroup.MAINHAND);
-            add(meta, Attribute.ATTACK_SPEED, speedKey, bonus, EquipmentSlotGroup.MAINHAND);
+            add(meta, Attribute.ATTACK_DAMAGE, new NamespacedKey(plugin, "bonus_attack_damage"), bonus, EquipmentSlotGroup.MAINHAND);
+            add(meta, Attribute.ATTACK_SPEED, new NamespacedKey(plugin, "bonus_attack_speed"), bonus, EquipmentSlotGroup.MAINHAND);
         }
     }
 
@@ -119,8 +120,13 @@ public final class AttributeUpgradeManager {
     }
 
     private boolean isForgeKey(NamespacedKey key) {
-        return key.equals(armorKey) || key.equals(toughnessKey) || key.equals(knockbackKey)
-                || key.equals(maxHealthKey) || key.equals(damageKey) || key.equals(speedKey);
+        if (key == null || !key.getNamespace().equals(plugin.getName().toLowerCase(java.util.Locale.ROOT))) return false;
+        String name = key.getKey();
+        return name.equals("bonus_armor") || name.startsWith("bonus_armor_")
+                || name.equals("bonus_armor_toughness") || name.startsWith("bonus_armor_toughness_")
+                || name.equals("bonus_knockback_resistance") || name.startsWith("bonus_knockback_resistance_")
+                || name.equals("bonus_max_health") || name.startsWith("bonus_max_health_")
+                || name.equals("bonus_attack_damage") || name.equals("bonus_attack_speed");
     }
 
     private EquipmentSlotGroup getArmorSlot(Material material) {
