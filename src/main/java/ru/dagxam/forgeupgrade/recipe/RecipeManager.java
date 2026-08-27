@@ -2,7 +2,9 @@ package ru.dagxam.forgeupgrade.recipe;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Tag;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -30,8 +32,7 @@ public final class RecipeManager {
 
     /**
      * Изумруд | Алмаз | Незеритовый слиток
-     * Доски    | Доски | Доски
-     * Доски    | Доски | Доски
+     * Любые доски во втором и третьем ряду.
      */
     private void registerUpgradeTableRecipe() {
         NamespacedKey key = new NamespacedKey(plugin, "upgrade_table");
@@ -47,7 +48,7 @@ public final class RecipeManager {
         recipe.setIngredient('E', Material.EMERALD);
         recipe.setIngredient('D', Material.DIAMOND);
         recipe.setIngredient('N', Material.NETHERITE_INGOT);
-        recipe.setIngredient('P', Material.OAK_PLANKS);
+        recipe.setIngredient('P', new RecipeChoice.MaterialChoice(Tag.PLANKS.getValues()));
         plugin.getServer().addRecipe(recipe);
     }
 
