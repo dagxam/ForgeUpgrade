@@ -2,7 +2,6 @@ package ru.dagxam.forgeupgrade.upgrade;
 
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -12,7 +11,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Хранит уровень улучшения и применяет его без накопления старых данных. */
+/** Хранит уровень улучшения и применяет реальные атрибуты предмета. */
 public final class UpgradeApplier {
     private static final String MARKER = "§8[ForgeUpgrade]";
     private static final String LEVEL_PREFIX = "§eВсе характеристики: §6+";
@@ -31,12 +30,11 @@ public final class UpgradeApplier {
 
     public boolean isSupported(ItemStack item) {
         if (item == null || item.getType().isAir() || item.getAmount() != 1) return false;
-        if (item.getType() == Material.SHIELD) return true;
         String name = item.getType().name();
-        return name.endsWith("_SWORD") || name.endsWith("_AXE") || name.endsWith("_PICKAXE")
-                || name.endsWith("_SHOVEL") || name.endsWith("_HOE") || name.endsWith("_HELMET")
-                || name.endsWith("_CHESTPLATE") || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS")
-                || item.getType() == Material.TRIDENT || item.getType() == Material.BOW
+        return item.getType() == Material.SHIELD || name.endsWith("_SWORD") || name.endsWith("_AXE")
+                || name.endsWith("_PICKAXE") || name.endsWith("_SHOVEL") || name.endsWith("_HOE")
+                || name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE") || name.endsWith("_LEGGINGS")
+                || name.endsWith("_BOOTS") || item.getType() == Material.TRIDENT || item.getType() == Material.BOW
                 || item.getType() == Material.CROSSBOW;
     }
 
@@ -48,8 +46,7 @@ public final class UpgradeApplier {
 
     public int getLevel(ItemStack item) {
         UpgradeType type = getAppliedType(item);
-        if (type == null) return 0;
-        return type.isInfinite() ? Integer.MAX_VALUE : type.getLevel();
+        return type == null ? 0 : type.getLevel();
     }
 
     public Result validate(ItemStack item, UpgradeType next) {
@@ -70,10 +67,11 @@ public final class UpgradeApplier {
 
         PersistentDataContainer data = meta.getPersistentDataContainer();
         data.set(typeKey, PersistentDataType.STRING, next.getId());
-        data.set(levelKey, PersistentDataType.INTEGER, next.isInfinite() ? Integer.MAX_VALUE : next.getLevel());
+        data.set(levelKey, PersistentDataType.INTEGER, next.getLevel());
         updateDisplay(meta, item, next);
         item.setItemMeta(meta);
-        attributeUpgradeManager.apply(item, next, getLevel(item));
+
+        attributeUpgradeManager.apply(item, next, next.getLevel());
         armorTrimUpgradeManager.apply(item, next);
         return Result.SUCCESS;
     }
@@ -89,17 +87,17 @@ public final class UpgradeApplier {
             for (String line : meta.getLore()) if (!isForgeLore(line)) lore.add(line);
         }
         lore.add(MARKER);
-        lore.add(type.isInfinite() ? "§4Улучшение: §cАрмагедон" : "§6Улучшение: §e" + type.getDisplayName());
-        lore.add(type.isInfinite() ? "§cВсе характеристики: §lБЕСКОНЕЧНО" : LEVEL_PREFIX + type.getLevel());
+        lore.add(type.isInfinite() ? "§4Улучшение: §cАрмагедон §7(технически +99999)" : "§6Улучшение: §e" + type.getDisplayName());
+        lore.add(type.isInfinite() ? "§cВсе характеристики: §l+99999" : LEVEL_PREFIX + type.getLevel());
         lore.add("§8Новое улучшение заменяет предыдущее.");
         meta.setLore(lore);
-        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+        // Атрибуты специально НЕ скрываем: игрок должен видеть реальные изменённые характеристики.
     }
 
     private boolean isForgeLore(String line) {
         return line != null && (line.equals(MARKER) || line.startsWith("§4Улучшение: §cАрмагедон")
                 || line.startsWith("§6Улучшение: §e") || line.startsWith(LEVEL_PREFIX)
-                || line.equals("§cВсе характеристики: §lБЕСКОНЕЧНО")
+                || line.equals("§cВсе характеристики: §l+99999")
                 || line.equals("§8Новое улучшение заменяет предыдущее."));
     }
 
