@@ -65,8 +65,6 @@ public final class AttributeUpgradeManager {
             add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, bonus, armorSlot);
             add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, bonus, armorSlot);
 
-            // Исправление: у брони Армагедона реально увеличивается максимум здоровья.
-            // Специальный бонус здоровья добавляется именно для уровня Армагеддон.
             if (type == UpgradeType.ARMAGEDDON) {
                 add(meta, Attribute.MAX_HEALTH, maxHealthKey, bonus, armorSlot);
             }
@@ -79,12 +77,14 @@ public final class AttributeUpgradeManager {
     }
 
     /**
-     * ATTACK_SPEED не влияет на скорость добычи блоков. Поэтому кирки, топоры, лопаты и мотыги
-     * получают реальную Эффективность соответствующего уровня улучшения.
-     * Исходный уровень Эффективности сохраняется, чтобы улучшение не уничтожало старое зачарование.
+     * Обычные улучшения повышают скорость добычи через Эффективность.
+     * Армагеддон на НЕ-незеритовых инструментах даёт только +999999 к характеристикам
+     * и не получает никаких дополнительных способностей или усилений инструмента.
+     * Полный набор способностей Армагеддона доступен только незеритовым предметам.
      */
     private void applyToolEfficiency(ItemMeta meta, Material material, UpgradeType type) {
         if (!isMiningTool(material)) return;
+        if (type == UpgradeType.ARMAGEDDON && !isNetheriteMiningTool(material)) return;
 
         PersistentDataContainer data = meta.getPersistentDataContainer();
         Integer original = data.get(originalEfficiencyKey, PersistentDataType.INTEGER);
@@ -143,6 +143,11 @@ public final class AttributeUpgradeManager {
         String name = material.name();
         return name.endsWith("_PICKAXE") || name.endsWith("_AXE")
                 || name.endsWith("_SHOVEL") || name.endsWith("_HOE");
+    }
+
+    private boolean isNetheriteMiningTool(Material material) {
+        return material == Material.NETHERITE_PICKAXE || material == Material.NETHERITE_AXE
+                || material == Material.NETHERITE_SHOVEL || material == Material.NETHERITE_HOE;
     }
 
     public int getLevel(ItemStack item) {
