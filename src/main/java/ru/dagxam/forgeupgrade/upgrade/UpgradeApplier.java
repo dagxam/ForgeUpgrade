@@ -18,14 +18,12 @@ public final class UpgradeApplier {
     private final NamespacedKey typeKey;
     private final NamespacedKey levelKey;
     private final AttributeUpgradeManager attributeUpgradeManager;
-    private final ArmorTrimUpgradeManager armorTrimUpgradeManager;
 
     public UpgradeApplier(JavaPlugin plugin, AttributeUpgradeManager attributeUpgradeManager,
-                          ArmorTrimUpgradeManager armorTrimUpgradeManager) {
+                          ArmorTrimUpgradeManager ignoredArmorTrimUpgradeManager) {
         this.typeKey = new NamespacedKey(plugin, "applied_upgrade_type");
         this.levelKey = new NamespacedKey(plugin, "upgrade_level");
         this.attributeUpgradeManager = attributeUpgradeManager;
-        this.armorTrimUpgradeManager = armorTrimUpgradeManager;
     }
 
     public boolean isSupported(ItemStack item) {
@@ -71,8 +69,8 @@ public final class UpgradeApplier {
         updateDisplay(meta, item, next);
         item.setItemMeta(meta);
 
+        // Отделка брони больше не применяется к самому предмету: шаблон только задаёт тип улучшения.
         attributeUpgradeManager.apply(item, next, next.getLevel());
-        armorTrimUpgradeManager.apply(item, next);
         return Result.SUCCESS;
     }
 
@@ -87,11 +85,10 @@ public final class UpgradeApplier {
             for (String line : meta.getLore()) if (!isForgeLore(line)) lore.add(line);
         }
         lore.add(MARKER);
-        lore.add(type.isInfinite() ? "§4Улучшение: §cАрмагедон §7(технически +99999)" : "§6Улучшение: §e" + type.getDisplayName());
+        lore.add(type.isInfinite() ? "§4Улучшение: §cАрмагедон" : "§6Улучшение: §e" + type.getDisplayName());
         lore.add(type.isInfinite() ? "§cВсе характеристики: §l+99999" : LEVEL_PREFIX + type.getLevel());
         lore.add("§8Новое улучшение заменяет предыдущее.");
         meta.setLore(lore);
-        // Атрибуты специально НЕ скрываем: игрок должен видеть реальные изменённые характеристики.
     }
 
     private boolean isForgeLore(String line) {
