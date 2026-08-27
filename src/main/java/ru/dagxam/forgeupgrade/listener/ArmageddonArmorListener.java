@@ -24,7 +24,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-/** Способности только улучшенной незеритовой и Армагедон-брони. */
+/** Способности улучшенной брони и Армагедон-брони. */
 public final class ArmageddonArmorListener implements Listener {
     private static final int EFFECT_DURATION = 2400;
     private static final int EFFECT_REFRESH_AT = 1200;
@@ -64,46 +64,40 @@ public final class ArmageddonArmorListener implements Listener {
         return getUpgrade(player, material) == UpgradeType.ARMAGEDDON;
     }
 
+    /** Армагеддон работает на любой броне, независимо от материала. */
     private boolean hasAnyArmageddonArmor(Player player) {
-        return hasArmageddon(player, Material.NETHERITE_HELMET)
-                || hasArmageddon(player, Material.NETHERITE_CHESTPLATE)
-                || hasArmageddon(player, Material.NETHERITE_LEGGINGS)
-                || hasArmageddon(player, Material.NETHERITE_BOOTS);
+        for (ItemStack item : player.getInventory().getArmorContents()) {
+            if (item != null && upgradeApplier.getAppliedType(item) == UpgradeType.ARMAGEDDON) return true;
+        }
+        return false;
     }
 
+    /** Незеритовое и Армагеддон-восстановление работает на любой улучшенной броне. */
     private boolean hasHealthRegenerationArmor(Player player) {
-        Material[] armor = {
-                Material.NETHERITE_HELMET,
-                Material.NETHERITE_CHESTPLATE,
-                Material.NETHERITE_LEGGINGS,
-                Material.NETHERITE_BOOTS
-        };
-        for (Material material : armor) {
-            UpgradeType type = getUpgrade(player, material);
+        for (ItemStack item : player.getInventory().getArmorContents()) {
+            if (item == null || !item.getType().name().matches(".*_(HELMET|CHESTPLATE|LEGGINGS|BOOTS)")) continue;
+            UpgradeType type = upgradeApplier.getAppliedType(item);
             if (type == UpgradeType.NETHERITE || type == UpgradeType.ARMAGEDDON) return true;
         }
         return false;
     }
 
     private void updatePlayer(Player player) {
+        // Особые способности по-прежнему только у незеритовой Армагеддон-брони.
         boolean helmet = hasArmageddon(player, Material.NETHERITE_HELMET);
         boolean chestplate = hasArmageddon(player, Material.NETHERITE_CHESTPLATE);
         boolean leggings = hasArmageddon(player, Material.NETHERITE_LEGGINGS);
         boolean boots = hasArmageddon(player, Material.NETHERITE_BOOTS);
 
         if (helmet) giveStableEffect(player, PotionEffectType.NIGHT_VISION, 0);
-
         if (hasHealthRegenerationArmor(player)) giveStableEffect(player, PotionEffectType.REGENERATION, 0);
 
-        // После надевания брони Армагедона сразу заполняем увеличенный максимум здоровья.
-        // Это исправляет ситуацию, когда модификатор уже добавлен, но шкала жизни визуально остаётся старой.
+        // Любая броня с Армагеддоном даёт реальный +MAX_HEALTH и сразу заполняет здоровье.
         if (hasAnyArmageddonArmor(player)) {
             AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
             if (maxHealth != null) {
                 double max = maxHealth.getValue();
-                if (max > 0.0D && player.getHealth() < max) {
-                    player.setHealth(max);
-                }
+                if (max > 0.0D && player.getHealth() < max) player.setHealth(max);
             }
         }
 
@@ -132,8 +126,7 @@ public final class ArmageddonArmorListener implements Listener {
 
     private void giveStableEffect(Player player, PotionEffectType type, int amplifier) {
         PotionEffect current = player.getPotionEffect(type);
-        if (current != null && current.getAmplifier() >= amplifier
-                && current.getDuration() > EFFECT_REFRESH_AT) return;
+        if (current != null && current.getAmplifier() >= amplifier && current.getDuration() > EFFECT_REFRESH_AT) return;
         player.addPotionEffect(new PotionEffect(type, EFFECT_DURATION, amplifier, true, false, false), true);
     }
 
@@ -143,26 +136,15 @@ public final class ArmageddonArmorListener implements Listener {
         if (!hasArmageddon(player, Material.NETHERITE_LEGGINGS)) return;
         EntityDamageEvent.DamageCause cause = event.getCause();
         if (cause == EntityDamageEvent.DamageCause.LAVA || cause == EntityDamageEvent.DamageCause.FIRE
-                || cause == EntityDamageEvent.DamageCause.FIRE_TICK || cause == EntityDamageEvent.DamageCause.HOT_FLOOR) {
-            event.setCancelled(true);
-        }
+                || cause == EntityDamageEvent.DamageCause.FIRE_TICK || cause == EntityDamageEvent.DamageCause.HOT_FLOOR) event.setCancelled(true);
     }
 
     @EventHandler
     public void onAirChange(EntityAirChangeEvent event) {
-        if (event.getEntity() instanceof Player player && hasArmageddon(player, Material.NETHERITE_LEGGINGS)) {
-            event.setAmount(player.getMaximumAir());
-        }
+        if (event.getEntity() instanceof Player player && hasArmageddon(player, Material.NETHERITE_LEGGINGS)) event.setAmount(player.getMaximumAir());
     }
 
-    @EventHandler
-    public void onJoin(PlayerJoinEvent event) { updatePlayer(event.getPlayer()); }
-
-    @EventHandler
-    public void onRespawn(PlayerRespawnEvent event) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> updatePlayer(event.getPlayer()));
-    }
-
-    @EventHandler
-    public void onWorldChange(PlayerChangedWorldEvent event) { updatePlayer(event.getPlayer()); }
+    @EventHandler public void onJoin(PlayerJoinEvent event) { updatePlayer(event.getPlayer()); }
+    @EventHandler public void onRespawn(PlayerRespawnEvent event) { plugin.getServer().getScheduler().runTask(plugin, () -> updatePlayer(event.getPlayer())); }
+    @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) { updatePlayer(event.getPlayer()); }
 }
