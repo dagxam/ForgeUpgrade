@@ -88,13 +88,13 @@ public final class UpgradeTableListener implements Listener {
     }
 
     /**
-     * Главное исправление: нативный кузнечный инвентарь сам пересчитывает и очищает результат.
-     * Поэтому результат создаётся именно через PrepareSmithingEvent и SmithingInventory#setResult().
+     * Результат устанавливается через сам PrepareSmithingEvent. Это надёжнее, чем
+     * менять слот после события: сервер и клиент получают один и тот же нативный результат.
      */
-    @EventHandler(priority = EventPriority.HIGHEST)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPrepareSmithing(PrepareSmithingEvent event) {
         if (!TITLE.equals(event.getView().getTitle())) return;
-        updateResult(event.getInventory());
+        event.setResult(createResult(event.getInventory()));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -139,10 +139,13 @@ public final class UpgradeTableListener implements Listener {
     }
 
     private void scheduleUpdate(SmithingInventory inventory) {
-        Bukkit.getScheduler().runTask(plugin, () -> updateResult(inventory));
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            inventory.setResult(createResult(inventory));
+            refreshViewers(inventory);
+        });
     }
 
-    private void updateResult(SmithingInventory inventory) {
+    private ItemStack createResult(SmithingInventory inventory) {
         ItemStack template = inventory.getItem(TEMPLATE_SLOT);
         ItemStack target = inventory.getItem(TARGET_SLOT);
         ItemStack material = inventory.getItem(MATERIAL_SLOT);
@@ -152,40 +155,42 @@ public final class UpgradeTableListener implements Listener {
                 || material == null || material.getType() != type.getSmithingMaterial()
                 || !upgradeApplier.isSupported(target)
                 || upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
-            inventory.setResult(null);
-            return;
+            return null;
         }
 
         ItemStack result = target.clone();
-        if (upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS) {
-            inventory.setResult(result);
-        } else {
-            inventory.setResult(null);
-        }
+        return upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS ? result : null;
     }
 
     private void takeResult(InventoryClickEvent event, SmithingInventory inventory) {
-        ItemStack result = inventory.getResult();
+        ItemStack result = createResult(inventory);
         if (result == null || result.getType().isAir()) return;
-        if (event.getCursor() != null && !event.getCursor().getType().isAir()) return;
 
         ItemStack template = inventory.getItem(TEMPLATE_SLOT);
         ItemStack target = inventory.getItem(TARGET_SLOT);
         ItemStack material = inventory.getItem(MATERIAL_SLOT);
         UpgradeType type = upgradeManager.getUpgradeType(template);
         if (type == null || target == null || material == null || material.getType() != type.getSmithingMaterial()) return;
-        if (!upgradeApplier.isSupported(target) || upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) return;
+
+        Player player = event.getWhoClicked() instanceof Player p ? p : null;
+        if (player == null) return;
+
+        if (event.isShiftClick()) {
+            Map<Integer, ItemStack> left = player.getInventory().addItem(result);
+            left.values().forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
+        } else {
+            ItemStack cursor = event.getCursor();
+            if (cursor != null && !cursor.getType().isAir()) return;
+            event.setCursor(result);
+        }
 
         consumeOne(inventory, TEMPLATE_SLOT);
         consumeOne(inventory, TARGET_SLOT);
         consumeOne(inventory, MATERIAL_SLOT);
         inventory.setResult(null);
-        event.setCursor(result);
+        refreshViewers(inventory);
         scheduleUpdate(inventory);
-
-        if (event.getWhoClicked() instanceof Player player) {
-            player.sendMessage("§a[ForgeUpgrade] §fУспешно применено: §e" + type.getDisplayName() + "§f.");
-        }
+        player.sendMessage("§a[ForgeUpgrade] §fУспешно применено: §e" + type.getDisplayName() + "§f.");
     }
 
     private void consumeOne(Inventory inventory, int slot) {
@@ -193,6 +198,12 @@ public final class UpgradeTableListener implements Listener {
         if (item == null) return;
         if (item.getAmount() <= 1) inventory.setItem(slot, null);
         else item.setAmount(item.getAmount() - 1);
+    }
+
+    private void refreshViewers(Inventory inventory) {
+        for (var viewer : inventory.getViewers()) {
+            if (viewer instanceof Player player) player.updateInventory();
+        }
     }
 
     @EventHandler
