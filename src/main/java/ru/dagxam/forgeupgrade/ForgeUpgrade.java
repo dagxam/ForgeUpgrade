@@ -5,6 +5,7 @@ import ru.dagxam.forgeupgrade.command.ForgeUpgradeCommand;
 import ru.dagxam.forgeupgrade.listener.ArmageddonArmorListener;
 import ru.dagxam.forgeupgrade.listener.ArmageddonToolListener;
 import ru.dagxam.forgeupgrade.listener.ArmageddonWeaponListener;
+import ru.dagxam.forgeupgrade.listener.HealthHudListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeAttributeListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeDefenseListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeTableListener;
@@ -37,6 +38,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ArmageddonArmorListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonWeaponListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonToolListener(this, upgradeApplier), this);
+        getServer().getPluginManager().registerEvents(new HealthHudListener(this), this);
 
         ForgeUpgradeCommand command = new ForgeUpgradeCommand(this, upgradeManager);
         if (getCommand("forgeupgrade") != null) {
@@ -50,6 +52,7 @@ public final class ForgeUpgrade extends JavaPlugin {
         getLogger().info("Отдельный Стол улучшений успешно включён.");
         getLogger().info("Обычный кузнечный стол оставлен без изменений.");
         getLogger().info("Реальные бонусы характеристик успешно включены.");
+        getLogger().info("Увеличенное здоровье масштабируется до стандартной шкалы сердца.");
         getLogger().info("Дополнительная защита улучшенной брони успешно включена.");
     }
 
