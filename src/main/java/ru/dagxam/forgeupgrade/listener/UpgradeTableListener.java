@@ -30,13 +30,20 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
-/** Отдельный крафтовый Стол улучшений. Обычные кузнечные столы не изменяются. */
+/**
+ * Отдельный крафтовый Стол улучшений.
+ *
+ * Важно: интерфейс открывается от настоящего блока SMITHING_TABLE, поэтому
+ * используется штатный интерфейс кузнечного стола и штатный слот результата.
+ * Обычные кузнечные столы не перехватываются.
+ */
 public final class UpgradeTableListener implements Listener {
-    private static final String TITLE = "§6Стол улучшений";
     private static final int TEMPLATE_SLOT = 0;
     private static final int TARGET_SLOT = 1;
     private static final int MATERIAL_SLOT = 2;
@@ -47,7 +54,9 @@ public final class UpgradeTableListener implements Listener {
     private final UpgradeApplier upgradeApplier;
     private final NamespacedKey tableItemKey;
     private final File dataFile;
+
     private final Set<String> upgradeTables = new HashSet<>();
+    private final Map<UUID, String> activeUpgradeTables = new HashMap<>();
 
     public UpgradeTableListener(JavaPlugin plugin, UpgradeManager upgradeManager, UpgradeApplier upgradeApplier) {
         this.plugin = plugin;
@@ -60,7 +69,9 @@ public final class UpgradeTableListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
-        if (event.getBlockPlaced().getType() != Material.SMITHING_TABLE || !isUpgradeTableItem(event.getItemInHand())) return;
+        if (event.getBlockPlaced().getType() != Material.SMITHING_TABLE || !isUpgradeTableItem(event.getItemInHand())) {
+            return;
+        }
         upgradeTables.add(locationKey(event.getBlockPlaced().getLocation()));
         saveTables();
     }
@@ -68,119 +79,181 @@ public final class UpgradeTableListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
         String key = locationKey(event.getBlock().getLocation());
-        if (!upgradeTables.remove(key)) return;
+        if (!upgradeTables.remove(key)) {
+            return;
+        }
+
         event.setDropItems(false);
-        event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation(), createUpgradeTableItem());
+        event.getBlock().getWorld().dropItemNaturally(
+                event.getBlock().getLocation(),
+                createUpgradeTableItem()
+        );
         saveTables();
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
-        if (event.getClickedBlock().getType() != Material.SMITHING_TABLE) return;
-        if (!upgradeTables.contains(locationKey(event.getClickedBlock().getLocation()))) return;
-        event.setCancelled(true);
-        open(event.getPlayer());
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) {
+            return;
+        }
+        if (event.getClickedBlock().getType() != Material.SMITHING_TABLE) {
+            return;
+        }
+
+        String key = locationKey(event.getClickedBlock().getLocation());
+        if (!upgradeTables.contains(key)) {
+            return; // Обычный кузнечный стол полностью ванильный.
+        }
+
+        // НЕ отменяем событие и НЕ создаём искусственный InventoryType.SMITHING.
+        // Minecraft сам открывает настоящий кузнечный интерфейс этого блока.
+        activeUpgradeTables.put(event.getPlayer().getUniqueId(), key);
     }
 
-    private void open(Player player) {
-        player.openInventory(Bukkit.createInventory(null, InventoryType.SMITHING, TITLE));
-    }
-
-    /**
-     * Результат устанавливается через сам PrepareSmithingEvent. Это надёжнее, чем
-     * менять слот после события: сервер и клиент получают один и тот же нативный результат.
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPrepareSmithing(PrepareSmithingEvent event) {
-        if (!TITLE.equals(event.getView().getTitle())) return;
+        if (!(event.getView().getPlayer() instanceof Player player)) {
+            return;
+        }
+        if (!isActiveUpgradeTable(player, event.getInventory())) {
+            return;
+        }
+
         event.setResult(createResult(event.getInventory()));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onClick(InventoryClickEvent event) {
-        if (!isUpgradeTable(event)) return;
-        int raw = event.getRawSlot();
+        if (!isUpgradeTable(event)) {
+            return;
+        }
+
         Inventory top = event.getView().getTopInventory();
+        if (!(top instanceof SmithingInventory inventory)) {
+            return;
+        }
+
+        int raw = event.getRawSlot();
 
         if (raw == RESULT_SLOT) {
             event.setCancelled(true);
-            takeResult(event, (SmithingInventory) top);
+            takeResult(event, inventory);
             return;
         }
 
         if (raw >= 0 && raw < top.getSize()) {
+            // В настоящем кузнечном интерфейсе разрешаем только 3 входных слота.
             if (raw != TEMPLATE_SLOT && raw != TARGET_SLOT && raw != MATERIAL_SLOT) {
                 event.setCancelled(true);
                 return;
             }
+
+            // Shift-клик может обходить ожидаемый порядок слотов.
             if (event.isShiftClick()) {
                 event.setCancelled(true);
                 return;
             }
-            scheduleUpdate((SmithingInventory) top);
+
+            scheduleUpdate(inventory);
             return;
         }
 
-        if (event.isShiftClick()) event.setCancelled(true);
+        // Shift-клик из инвентаря игрока отключаем, чтобы предметы не попадали
+        // автоматически в неверные слоты ванильной логикой.
+        if (event.isShiftClick()) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler
     public void onDrag(InventoryDragEvent event) {
-        if (!isUpgradeTable(event)) return;
+        if (!isUpgradeTable(event)) {
+            return;
+        }
+
         for (int raw : event.getRawSlots()) {
             if (raw < event.getView().getTopInventory().getSize()
-                    && raw != TEMPLATE_SLOT && raw != TARGET_SLOT && raw != MATERIAL_SLOT) {
+                    && raw != TEMPLATE_SLOT
+                    && raw != TARGET_SLOT
+                    && raw != MATERIAL_SLOT) {
                 event.setCancelled(true);
                 return;
             }
         }
-        scheduleUpdate((SmithingInventory) event.getView().getTopInventory());
+
+        if (event.getView().getTopInventory() instanceof SmithingInventory inventory) {
+            scheduleUpdate(inventory);
+        }
     }
 
+    /**
+     * После завершения ванильной операции клика принудительно пересчитываем результат.
+     * Это устраняет ситуацию, когда сервер сначала пересчитывает ванильный рецепт
+     * и временно очищает слот результата.
+     */
     private void scheduleUpdate(SmithingInventory inventory) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            inventory.setResult(createResult(inventory));
-            refreshViewers(inventory);
-        });
+        Bukkit.getScheduler().runTask(plugin, () -> inventory.setResult(createResult(inventory)));
     }
 
     private ItemStack createResult(SmithingInventory inventory) {
         ItemStack template = inventory.getItem(TEMPLATE_SLOT);
         ItemStack target = inventory.getItem(TARGET_SLOT);
         ItemStack material = inventory.getItem(MATERIAL_SLOT);
-        UpgradeType type = upgradeManager.getUpgradeType(template);
 
-        if (type == null || target == null || target.getType().isAir()
-                || material == null || material.getType() != type.getSmithingMaterial()
-                || !upgradeApplier.isSupported(target)
-                || upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
+        UpgradeType type = upgradeManager.getUpgradeType(template);
+        if (type == null) {
+            return null;
+        }
+        if (target == null || target.getType().isAir()) {
+            return null;
+        }
+        if (material == null || material.getType() != type.getSmithingMaterial()) {
+            return null;
+        }
+        if (!upgradeApplier.isSupported(target)) {
+            return null;
+        }
+        if (upgradeApplier.validate(target, type) != UpgradeApplier.Result.SUCCESS) {
             return null;
         }
 
         ItemStack result = target.clone();
-        return upgradeApplier.apply(result, type) == UpgradeApplier.Result.SUCCESS ? result : null;
+        if (upgradeApplier.apply(result, type) != UpgradeApplier.Result.SUCCESS) {
+            return null;
+        }
+        return result;
     }
 
     private void takeResult(InventoryClickEvent event, SmithingInventory inventory) {
         ItemStack result = createResult(inventory);
-        if (result == null || result.getType().isAir()) return;
+        if (result == null || result.getType().isAir()) {
+            return;
+        }
 
         ItemStack template = inventory.getItem(TEMPLATE_SLOT);
         ItemStack target = inventory.getItem(TARGET_SLOT);
         ItemStack material = inventory.getItem(MATERIAL_SLOT);
         UpgradeType type = upgradeManager.getUpgradeType(template);
-        if (type == null || target == null || material == null || material.getType() != type.getSmithingMaterial()) return;
+
+        if (type == null || target == null || material == null
+                || material.getType() != type.getSmithingMaterial()) {
+            return;
+        }
 
         Player player = event.getWhoClicked() instanceof Player p ? p : null;
-        if (player == null) return;
+        if (player == null) {
+            return;
+        }
 
         if (event.isShiftClick()) {
             Map<Integer, ItemStack> left = player.getInventory().addItem(result);
-            left.values().forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
+            left.values().forEach(stack ->
+                    player.getWorld().dropItemNaturally(player.getLocation(), stack));
         } else {
             ItemStack cursor = event.getCursor();
-            if (cursor != null && !cursor.getType().isAir()) return;
+            if (cursor != null && !cursor.getType().isAir()) {
+                return;
+            }
             event.setCursor(result);
         }
 
@@ -188,53 +261,78 @@ public final class UpgradeTableListener implements Listener {
         consumeOne(inventory, TARGET_SLOT);
         consumeOne(inventory, MATERIAL_SLOT);
         inventory.setResult(null);
-        refreshViewers(inventory);
+
+        Bukkit.getScheduler().runTask(plugin, player::updateInventory);
         scheduleUpdate(inventory);
-        player.sendMessage("§a[ForgeUpgrade] §fУспешно применено: §e" + type.getDisplayName() + "§f.");
+
+        player.sendMessage("§a[ForgeUpgrade] §fУспешно применено: §e"
+                + type.getDisplayName() + "§f.");
     }
 
     private void consumeOne(Inventory inventory, int slot) {
         ItemStack item = inventory.getItem(slot);
-        if (item == null) return;
-        if (item.getAmount() <= 1) inventory.setItem(slot, null);
-        else item.setAmount(item.getAmount() - 1);
-    }
+        if (item == null) {
+            return;
+        }
 
-    private void refreshViewers(Inventory inventory) {
-        for (var viewer : inventory.getViewers()) {
-            if (viewer instanceof Player player) player.updateInventory();
+        if (item.getAmount() <= 1) {
+            inventory.setItem(slot, null);
+        } else {
+            item.setAmount(item.getAmount() - 1);
+            inventory.setItem(slot, item);
         }
     }
 
     @EventHandler
     public void onClose(InventoryCloseEvent event) {
-        if (!isUpgradeTable(event)) return;
-        Inventory inventory = event.getInventory();
-        Player player = (Player) event.getPlayer();
-        for (int slot : new int[]{TEMPLATE_SLOT, TARGET_SLOT, MATERIAL_SLOT}) {
-            ItemStack item = inventory.getItem(slot);
-            if (item == null || item.getType().isAir()) continue;
-            Map<Integer, ItemStack> left = player.getInventory().addItem(item);
-            left.values().forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
+        if (!(event.getPlayer() instanceof Player player)) {
+            return;
         }
-        inventory.clear();
+        if (!isUpgradeTable(event)) {
+            return;
+        }
+
+        activeUpgradeTables.remove(player.getUniqueId());
     }
 
     private boolean isUpgradeTable(InventoryClickEvent event) {
-        return event.getView().getTopInventory().getType() == InventoryType.SMITHING && TITLE.equals(event.getView().getTitle());
+        return event.getView().getTopInventory().getType() == InventoryType.SMITHING
+                && activeUpgradeTables.containsKey(event.getWhoClicked().getUniqueId());
     }
 
     private boolean isUpgradeTable(InventoryDragEvent event) {
-        return event.getView().getTopInventory().getType() == InventoryType.SMITHING && TITLE.equals(event.getView().getTitle());
+        return event.getView().getTopInventory().getType() == InventoryType.SMITHING
+                && event.getWhoClicked() instanceof Player player
+                && activeUpgradeTables.containsKey(player.getUniqueId());
     }
 
     private boolean isUpgradeTable(InventoryCloseEvent event) {
-        return event.getInventory().getType() == InventoryType.SMITHING && TITLE.equals(event.getView().getTitle());
+        return event.getInventory().getType() == InventoryType.SMITHING
+                && event.getPlayer() instanceof Player player
+                && activeUpgradeTables.containsKey(player.getUniqueId());
+    }
+
+    private boolean isActiveUpgradeTable(Player player, SmithingInventory inventory) {
+        String expected = activeUpgradeTables.get(player.getUniqueId());
+        if (expected == null) {
+            return false;
+        }
+
+        Location location = inventory.getLocation();
+        if (location == null) {
+            return false;
+        }
+
+        return expected.equals(locationKey(location));
     }
 
     private boolean isUpgradeTableItem(ItemStack item) {
-        if (item == null || item.getType() != Material.SMITHING_TABLE || !item.hasItemMeta()) return false;
-        Byte marker = item.getItemMeta().getPersistentDataContainer().get(tableItemKey, PersistentDataType.BYTE);
+        if (item == null || item.getType() != Material.SMITHING_TABLE || !item.hasItemMeta()) {
+            return false;
+        }
+
+        Byte marker = item.getItemMeta().getPersistentDataContainer()
+                .get(tableItemKey, PersistentDataType.BYTE);
         return marker != null && marker == (byte) 1;
     }
 
@@ -243,18 +341,25 @@ public final class UpgradeTableListener implements Listener {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName("§6Стол улучшений");
-            meta.getPersistentDataContainer().set(tableItemKey, PersistentDataType.BYTE, (byte) 1);
+            meta.getPersistentDataContainer().set(
+                    tableItemKey, PersistentDataType.BYTE, (byte) 1);
             item.setItemMeta(meta);
         }
         return item;
     }
 
     private String locationKey(Location location) {
-        return location.getWorld().getUID() + ":" + location.getBlockX() + ":" + location.getBlockY() + ":" + location.getBlockZ();
+        return location.getWorld().getUID()
+                + ":" + location.getBlockX()
+                + ":" + location.getBlockY()
+                + ":" + location.getBlockZ();
     }
 
     private void loadTables() {
-        if (!dataFile.exists()) return;
+        if (!dataFile.exists()) {
+            return;
+        }
+
         YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
         upgradeTables.addAll(config.getStringList("tables"));
     }
@@ -262,10 +367,13 @@ public final class UpgradeTableListener implements Listener {
     private void saveTables() {
         YamlConfiguration config = new YamlConfiguration();
         config.set("tables", upgradeTables.stream().sorted().toList());
+
         try {
             config.save(dataFile);
         } catch (IOException exception) {
-            plugin.getLogger().warning("Не удалось сохранить расположение Столов улучшений: " + exception.getMessage());
+            plugin.getLogger().warning(
+                    "Не удалось сохранить расположение Столов улучшений: "
+                            + exception.getMessage());
         }
     }
 }
