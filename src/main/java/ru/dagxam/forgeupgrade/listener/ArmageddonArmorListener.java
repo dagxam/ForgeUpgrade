@@ -27,7 +27,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-/** Способности улучшенной брони и Армагедон-брони. */
+/** Способности улучшенной брони. */
 public final class ArmageddonArmorListener implements Listener {
     private static final int EFFECT_DURATION = 2400;
     private static final int EFFECT_REFRESH_AT = 1200;
@@ -78,12 +78,18 @@ public final class ArmageddonArmorListener implements Listener {
         return hasUpgradeArmor(player, UpgradeType.ARMAGEDDON);
     }
 
-    /** Незеритовое и Армагеддон-восстановление работает на любой улучшенной броне. */
+    /** Любая улучшенная броня золотого уровня и выше восстанавливает здоровье. */
     private boolean hasHealthRegenerationArmor(Player player) {
         for (ItemStack item : player.getInventory().getArmorContents()) {
             if (item == null || !item.getType().name().matches(".*_(HELMET|CHESTPLATE|LEGGINGS|BOOTS)")) continue;
             UpgradeType type = upgradeApplier.getAppliedType(item);
-            if (type == UpgradeType.NETHERITE || type == UpgradeType.ARMAGEDDON) return true;
+            if (type == UpgradeType.GOLD
+                    || type == UpgradeType.EMERALD
+                    || type == UpgradeType.DIAMOND
+                    || type == UpgradeType.NETHERITE
+                    || type == UpgradeType.ARMAGEDDON) {
+                return true;
+            }
         }
         return false;
     }
@@ -130,14 +136,11 @@ public final class ArmageddonArmorListener implements Listener {
         player.addPotionEffect(new PotionEffect(type, EFFECT_DURATION, amplifier, true, false, false), true);
     }
 
-    /** Дополнительная защита всех типов улучшенной брони. */
     @EventHandler(ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
 
         EntityDamageEvent.DamageCause cause = event.getCause();
-
-        // Алмазное и незеритовое: полная защита от огня и утопления.
         boolean fireOrDrowning = cause == EntityDamageEvent.DamageCause.FIRE
                 || cause == EntityDamageEvent.DamageCause.FIRE_TICK
                 || cause == EntityDamageEvent.DamageCause.LAVA
@@ -148,7 +151,6 @@ public final class ArmageddonArmorListener implements Listener {
             return;
         }
 
-        // Незеритовая Армагеддон-броня сохраняет прежнюю специальную защиту от огня.
         if ((cause == EntityDamageEvent.DamageCause.LAVA || cause == EntityDamageEvent.DamageCause.FIRE
                 || cause == EntityDamageEvent.DamageCause.FIRE_TICK || cause == EntityDamageEvent.DamageCause.HOT_FLOOR)
                 && hasArmageddon(player, Material.NETHERITE_LEGGINGS)) {
@@ -158,7 +160,6 @@ public final class ArmageddonArmorListener implements Listener {
 
         if (!(event instanceof EntityDamageByEntityEvent byEntity)) return;
 
-        // Золотое и незеритовое: защита от стрел, выпущенных скелетами.
         if (byEntity.getDamager() instanceof org.bukkit.entity.Projectile projectile
                 && projectile.getShooter() instanceof Skeleton
                 && (hasUpgradeArmor(player, UpgradeType.GOLD) || hasUpgradeArmor(player, UpgradeType.NETHERITE))) {
@@ -166,21 +167,17 @@ public final class ArmageddonArmorListener implements Listener {
             return;
         }
 
-        // Изумрудное и незеритовое: защита от взрывов криперов.
         if (byEntity.getDamager() instanceof Creeper
                 && (hasUpgradeArmor(player, UpgradeType.EMERALD) || hasUpgradeArmor(player, UpgradeType.NETHERITE))) {
             event.setCancelled(true);
         }
     }
 
-    /** На случай урона ENTITY_EXPLOSION сохраняем защиту от взрыва крипера. */
     @EventHandler(ignoreCancelled = true)
     public void onExplosionDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
         if (event.getCause() != EntityDamageEvent.DamageCause.ENTITY_EXPLOSION) return;
-        if (hasUpgradeArmor(player, UpgradeType.EMERALD) || hasUpgradeArmor(player, UpgradeType.NETHERITE)) {
-            event.setCancelled(true);
-        }
+        if (hasUpgradeArmor(player, UpgradeType.EMERALD) || hasUpgradeArmor(player, UpgradeType.NETHERITE)) event.setCancelled(true);
     }
 
     @EventHandler
