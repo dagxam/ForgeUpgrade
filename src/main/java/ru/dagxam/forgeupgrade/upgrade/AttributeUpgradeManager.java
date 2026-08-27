@@ -18,7 +18,8 @@ import java.util.Map;
 
 /**
  * Реально изменяет характеристики предмета через AttributeModifier.
- * Уровень +10/+30/+50/+70 всегда заменяет предыдущий бонус, а не складывается с ним.
+ * Каждый уровень полностью заменяет предыдущий бонус.
+ * Армагедон использует безопасный лимит +99999 вместо бесконечности.
  */
 public final class AttributeUpgradeManager {
     private final NamespacedKey markerKey;
@@ -39,38 +40,32 @@ public final class AttributeUpgradeManager {
         speedKey = new NamespacedKey(plugin, "bonus_attack_speed");
     }
 
-    public void apply(ItemStack item, UpgradeType type, int level) {
-        if (item == null || item.getType().isAir()) return;
+    public void apply(ItemStack item, UpgradeType type, int ignoredLevel) {
+        if (item == null || item.getType().isAir() || type == null) return;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return;
 
-        // Сначала полностью убираем старый уровень ForgeUpgrade.
         removeForgeModifiers(meta);
 
+        int bonus = type.getAttributeBonus();
         PersistentDataContainer data = meta.getPersistentDataContainer();
         data.set(markerKey, PersistentDataType.STRING, type.getId());
-        data.set(levelKey, PersistentDataType.INTEGER, level);
+        data.set(levelKey, PersistentDataType.INTEGER, bonus);
 
-        // Армагедон не записывает Integer.MAX_VALUE в реальные атрибуты.
-        if (!type.isInfinite() && level > 0) {
-            addBonuses(meta, item.getType(), level);
-        }
-
+        if (bonus > 0) addBonuses(meta, item.getType(), bonus);
         item.setItemMeta(meta);
     }
 
-    private void addBonuses(ItemMeta meta, Material material, int level) {
-        // Броня: все её реальные боевые характеристики получают полный бонус уровня.
+    private void addBonuses(ItemMeta meta, Material material, int bonus) {
         if (isArmor(material)) {
-            add(meta, Attribute.ARMOR, armorKey, level);
-            add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, level);
-            add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, level);
+            add(meta, Attribute.ARMOR, armorKey, bonus);
+            add(meta, Attribute.ARMOR_TOUGHNESS, toughnessKey, bonus);
+            add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, bonus);
         }
 
-        // Оружие и инструменты: урон и скорость атаки реально изменяются на полный уровень.
         if (hasMeleeAttributes(material)) {
-            add(meta, Attribute.ATTACK_DAMAGE, damageKey, level);
-            add(meta, Attribute.ATTACK_SPEED, speedKey, level);
+            add(meta, Attribute.ATTACK_DAMAGE, damageKey, bonus);
+            add(meta, Attribute.ATTACK_SPEED, speedKey, bonus);
         }
     }
 
@@ -85,53 +80,38 @@ public final class AttributeUpgradeManager {
 
     private void removeForgeModifiers(ItemMeta meta) {
         if (!meta.hasAttributeModifiers()) return;
-
         Map<Attribute, Collection<AttributeModifier>> modifiers = meta.getAttributeModifiers().asMap();
         List<Removal> removals = new ArrayList<>();
-
         for (Map.Entry<Attribute, Collection<AttributeModifier>> entry : modifiers.entrySet()) {
             for (AttributeModifier modifier : entry.getValue()) {
-                if (isForgeKey(modifier.getKey())) {
-                    removals.add(new Removal(entry.getKey(), modifier));
-                }
+                if (isForgeKey(modifier.getKey())) removals.add(new Removal(entry.getKey(), modifier));
             }
         }
-
         for (Removal removal : removals) {
             meta.removeAttributeModifier(removal.attribute(), removal.modifier());
         }
     }
 
     private boolean isForgeKey(NamespacedKey key) {
-        return key.equals(armorKey)
-                || key.equals(toughnessKey)
-                || key.equals(knockbackKey)
-                || key.equals(damageKey)
-                || key.equals(speedKey);
+        return key.equals(armorKey) || key.equals(toughnessKey) || key.equals(knockbackKey)
+                || key.equals(damageKey) || key.equals(speedKey);
     }
 
     private boolean isArmor(Material material) {
         String name = material.name();
-        return name.endsWith("_HELMET")
-                || name.endsWith("_CHESTPLATE")
-                || name.endsWith("_LEGGINGS")
-                || name.endsWith("_BOOTS");
+        return name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE")
+                || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
     }
 
     private boolean hasMeleeAttributes(Material material) {
         String name = material.name();
-        return name.endsWith("_SWORD")
-                || name.endsWith("_AXE")
-                || name.endsWith("_PICKAXE")
-                || name.endsWith("_SHOVEL")
-                || name.endsWith("_HOE")
-                || material == Material.TRIDENT;
+        return name.endsWith("_SWORD") || name.endsWith("_AXE") || name.endsWith("_PICKAXE")
+                || name.endsWith("_SHOVEL") || name.endsWith("_HOE") || material == Material.TRIDENT;
     }
 
     public int getLevel(ItemStack item) {
         if (item == null || item.getType().isAir() || !item.hasItemMeta()) return 0;
-        Integer level = item.getItemMeta().getPersistentDataContainer()
-                .get(levelKey, PersistentDataType.INTEGER);
+        Integer level = item.getItemMeta().getPersistentDataContainer().get(levelKey, PersistentDataType.INTEGER);
         return level == null ? 0 : level;
     }
 
