@@ -18,6 +18,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
+import java.util.Map;
+
 /** Дополнительные способности Армагедона только для незеритовых инструментов. */
 public final class ArmageddonToolListener implements Listener {
     private final JavaPlugin plugin;
@@ -65,15 +67,44 @@ public final class ArmageddonToolListener implements Listener {
 
     /** Кирка Армагедона ломает любой блок с одного удара, включая BEDROCK. */
     private void forceBreak(Player player, ItemStack tool, Block block) {
+        Material originalType = block.getType();
+
         BlockBreakEvent breakEvent = new BlockBreakEvent(block, player);
         plugin.getServer().getPluginManager().callEvent(breakEvent);
         if (breakEvent.isCancelled()) return;
 
-        if (block.getType() == Material.BEDROCK) {
-            block.setType(Material.AIR);
-        } else {
-            block.breakNaturally(tool);
+        if (originalType == Material.BEDROCK) {
+            // BEDROCK обычно не имеет естественного дропа, поэтому после успешного
+            // разрушения создаём настоящий блок BEDROCK и помещаем его в инвентарь.
+            block.setType(Material.AIR, false);
+            giveBedrockToPlayer(player, block);
+            return;
         }
+
+        block.breakNaturally(tool);
+    }
+
+    /**
+     * Выдаёт сломанный BEDROCK напрямую в инвентарь.
+     * Если инвентарь заполнен, остаток выбрасывается рядом с игроком,
+     * чтобы блок никогда не исчезал без дропа.
+     */
+    private void giveBedrockToPlayer(Player player, Block brokenBlock) {
+        ItemStack bedrock = new ItemStack(Material.BEDROCK, 1);
+        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(bedrock);
+
+        for (ItemStack leftover : leftovers.values()) {
+            player.getWorld().dropItemNaturally(
+                    brokenBlock.getLocation().add(0.5D, 0.5D, 0.5D),
+                    leftover
+            );
+        }
+
+        brokenBlock.getWorld().spawnParticle(
+                Particle.CRIT,
+                brokenBlock.getLocation().add(0.5D, 0.5D, 0.5D),
+                24, 0.35D, 0.35D, 0.35D, 0.08D
+        );
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
