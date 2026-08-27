@@ -51,16 +51,9 @@ public final class AttributeUpgradeManager {
     private void addBonuses(ItemMeta meta, Material material, int bonus, UpgradeType type) {
         EquipmentSlotGroup armorSlot = getArmorSlot(material);
         if (armorSlot != null) {
-            // Ключи модификаторов обязательно уникальны для каждого слота брони.
-            // Одинаковый ключ на шлеме, нагруднике, поножах и ботинках мог приводить
-            // к конфликту идентификаторов, из-за чего бонус отображался/применялся не полностью.
-            String suffix = switch (armorSlot) {
-                case HEAD -> "head";
-                case CHEST -> "chest";
-                case LEGS -> "legs";
-                case FEET -> "feet";
-                default -> "armor";
-            };
+            // В используемой Bukkit 26.2 API есть группа ARMOR, а не отдельные
+            // HEAD/CHEST/LEGS/FEET. Уникальность модификаторов сохраняем в ключе.
+            String suffix = getArmorSuffix(material);
 
             add(meta, Attribute.ARMOR, new NamespacedKey(plugin, "bonus_armor_" + suffix), bonus, armorSlot);
             add(meta, Attribute.ARMOR_TOUGHNESS, new NamespacedKey(plugin, "bonus_armor_toughness_" + suffix), bonus, armorSlot);
@@ -130,12 +123,22 @@ public final class AttributeUpgradeManager {
     }
 
     private EquipmentSlotGroup getArmorSlot(Material material) {
+        return isArmor(material) ? EquipmentSlotGroup.ARMOR : null;
+    }
+
+    private String getArmorSuffix(Material material) {
         String name = material.name();
-        if (name.endsWith("_HELMET")) return EquipmentSlotGroup.HEAD;
-        if (name.endsWith("_CHESTPLATE")) return EquipmentSlotGroup.CHEST;
-        if (name.endsWith("_LEGGINGS")) return EquipmentSlotGroup.LEGS;
-        if (name.endsWith("_BOOTS")) return EquipmentSlotGroup.FEET;
-        return null;
+        if (name.endsWith("_HELMET")) return "head";
+        if (name.endsWith("_CHESTPLATE")) return "chest";
+        if (name.endsWith("_LEGGINGS")) return "legs";
+        if (name.endsWith("_BOOTS")) return "feet";
+        return "armor";
+    }
+
+    private boolean isArmor(Material material) {
+        String name = material.name();
+        return name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE")
+                || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
     }
 
     private boolean hasCombatAttributes(Material material) {
