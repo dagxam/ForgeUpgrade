@@ -13,7 +13,6 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
 /** Компактный цифровой HUD реального здоровья и брони для любого улучшения. */
 public final class UpgradeStatusHudListener {
-    // Реальное здоровье остаётся настоящим, но огромные столбцы сердец не закрывают экран.
     private static final double COMPACT_HEALTH_SCALE = 0.1D;
 
     private final JavaPlugin plugin;
@@ -35,6 +34,12 @@ public final class UpgradeStatusHudListener {
     }
 
     private void update(Player player) {
+        // Автоматически переносим старую улучшенную броню на исправленные уникальные
+        // модификаторы слотов. Поэтому после обновления плагина не нужно заново улучшать броню.
+        for (ItemStack item : player.getInventory().getArmorContents()) {
+            upgradeApplier.refreshAttributes(item);
+        }
+
         UpgradeType visualType = getHighestArmorUpgrade(player);
         if (visualType == null) {
             if (player.isHealthScaled()) player.setHealthScaled(false);
@@ -49,9 +54,7 @@ public final class UpgradeStatusHudListener {
         double maxHealth = maxHealthAttribute == null ? 0.0D : maxHealthAttribute.getValue();
         double actualArmor = armorAttribute == null ? 0.0D : armorAttribute.getValue();
 
-        // Считаем бонус прямо по каждому надетому улучшенному предмету.
-        // Поэтому цифры HUD всегда показывают полный прирост брони, даже если стандартная
-        // шкала Minecraft визуально ограничена и не умеет рисовать сотни тысяч значков.
+        // Стандартная шкала Minecraft ограничена визуально. Полный бонус выводим цифрами.
         int armorBonus = getArmorBonus(player);
         double baseArmor = Math.max(0.0D, actualArmor - armorBonus);
         double displayArmor = Math.max(actualArmor, baseArmor + armorBonus);
