@@ -12,14 +12,12 @@ import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
 /**
- * Компактный HUD улучшенной брони.
- * Визуально оставляет стандартные 10 сердец Minecraft и показывает ТОЧНЫЕ
- * текущие значения здоровья и брони цифрами, без тысяч нарисованных сердец.
+ * HUD улучшенной брони.
+ * Не рисует вторые сердца и вторую броню: стандартный HUD Minecraft остаётся как есть.
+ * Плагин выводит только точные числовые значения здоровья и брони.
  */
 public final class UpgradeStatusHudListener {
     private static final double STANDARD_HEALTH_SCALE = 20.0D;
-    private static final String HEARTS = "❤❤❤❤❤❤❤❤❤❤";
-    private static final String SHIELDS = "🛡🛡🛡🛡🛡🛡🛡🛡🛡🛡";
 
     private final JavaPlugin plugin;
     private final UpgradeApplier upgradeApplier;
@@ -55,7 +53,7 @@ public final class UpgradeStatusHudListener {
             return;
         }
 
-        // На экране всегда остаётся обычная шкала из 10 сердец.
+        // Оставляем обычные 10 сердец Minecraft, не создавая второй ряд сердец.
         player.setHealthScaled(true);
         player.setHealthScale(STANDARD_HEALTH_SCALE);
 
@@ -70,12 +68,14 @@ public final class UpgradeStatusHudListener {
 
         String color = color(visualType);
 
-        // Формат как на примере:
-        // 🛡🛡🛡🛡🛡🛡🛡🛡🛡🛡 +1004   ❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️ +1004
-        // Цифры берутся из фактических атрибутов игрока, поэтому отображаются точно.
-        String message = color + SHIELDS + " §f+" + color + format(exactArmor)
-                + "    " + color + HEARTS + " §f+" + color + format(exactHeartCount)
-                + "    §8[" + color + visualType.getDisplayName() + "§8]";
+        // ВАЖНО: здесь больше НЕТ нарисованных ❤ и 🛡.
+        // На экране остаются только стандартные иконки Minecraft, а плагин выводит
+        // только точные цифры: здоровье и броня.
+        // Формат: +999999 HP   +999999 ARMOR
+        String message = color + "+" + format(exactHeartCount)
+                + " §7❤   "
+                + color + "+" + format(exactArmor)
+                + " §7🛡";
 
         player.spigot().sendMessage(
                 ChatMessageType.ACTION_BAR,
