@@ -29,8 +29,9 @@ public final class UpgradeApplier {
     public boolean isSupported(ItemStack item) {
         if (item == null || item.getType().isAir() || item.getAmount() != 1) return false;
         String name = item.getType().name();
-        return item.getType() == Material.SHIELD || name.endsWith("_SWORD") || name.endsWith("_AXE")
+        return name.endsWith("_SWORD") || name.endsWith("_AXE")
                 || name.endsWith("_PICKAXE") || name.endsWith("_SHOVEL") || name.endsWith("_HOE")
+                || name.endsWith("_SPEAR")
                 || name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE") || name.endsWith("_LEGGINGS")
                 || name.endsWith("_BOOTS") || item.getType() == Material.TRIDENT || item.getType() == Material.BOW
                 || item.getType() == Material.CROSSBOW;
@@ -47,11 +48,6 @@ public final class UpgradeApplier {
         return type == null ? 0 : type.getLevel();
     }
 
-    /**
-     * Любое улучшение можно применить сразу к обычному предмету.
-     * Не требуется проходить цепочку +10 -> +30 -> +50 -> +70.
-     * Новое улучшение полностью заменяет предыдущее, если это другой тип.
-     */
     public Result validate(ItemStack item, UpgradeType next) {
         if (!isSupported(item) || next == null) return Result.UNSUPPORTED;
         UpgradeType current = getAppliedType(item);
@@ -71,7 +67,6 @@ public final class UpgradeApplier {
         updateDisplay(meta, item, next);
         item.setItemMeta(meta);
 
-        // Шаблон используется только как тип улучшения. Ванильная отделка предмету не добавляется.
         attributeUpgradeManager.apply(item, next, next.getLevel());
         return Result.SUCCESS;
     }
