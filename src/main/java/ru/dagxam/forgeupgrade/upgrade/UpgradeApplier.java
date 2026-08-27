@@ -56,6 +56,12 @@ public final class UpgradeApplier {
         return type == null ? 0 : type.getLevel();
     }
 
+    /** Переприменяет реальные атрибуты уже существующего улучшенного предмета. */
+    public void refreshAttributes(ItemStack item) {
+        UpgradeType type = getAppliedType(item);
+        if (type != null) attributeUpgradeManager.apply(item, type, type.getLevel());
+    }
+
     public Result validate(ItemStack item, UpgradeType next) {
         if (!isSupported(item) || next == null) return Result.UNSUPPORTED;
         UpgradeType current = getAppliedType(item);
