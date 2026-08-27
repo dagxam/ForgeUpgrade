@@ -11,7 +11,11 @@ import org.bukkit.scheduler.BukkitRunnable;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeApplier;
 import ru.dagxam.forgeupgrade.upgrade.UpgradeType;
 
-/** Стандартные сердца Minecraft + компактные числовые бонусы здоровья и брони над хотбаром. */
+/**
+ * Компактный HUD улучшенной брони.
+ * Визуально оставляет стандартные 10 сердец Minecraft и показывает ТОЧНЫЕ
+ * текущие значения здоровья и брони цифрами, без тысяч нарисованных сердец.
+ */
 public final class UpgradeStatusHudListener {
     private static final double STANDARD_HEALTH_SCALE = 20.0D;
     private static final String HEARTS = "❤❤❤❤❤❤❤❤❤❤";
@@ -30,42 +34,53 @@ public final class UpgradeStatusHudListener {
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (Player player : plugin.getServer().getOnlinePlayers()) update(player);
+                for (Player player : plugin.getServer().getOnlinePlayers()) {
+                    update(player);
+                }
             }
         }.runTaskTimer(plugin, 1L, 2L);
     }
 
     private void update(Player player) {
-        // Автоматически переносим старую улучшенную броню на исправленные уникальные модификаторы.
+        // Переприменяем атрибуты старой улучшенной брони с актуальными модификаторами.
         for (ItemStack item : player.getInventory().getArmorContents()) {
             upgradeApplier.refreshAttributes(item);
         }
 
         UpgradeType visualType = getHighestArmorUpgrade(player);
         if (visualType == null) {
-            if (player.isHealthScaled()) player.setHealthScaled(false);
+            if (player.isHealthScaled()) {
+                player.setHealthScaled(false);
+            }
             return;
         }
 
-        // Всегда оставляем ровно стандартные 10 визуальных сердец, независимо от огромного MAX_HEALTH.
+        // На экране всегда остаётся обычная шкала из 10 сердец.
         player.setHealthScaled(true);
         player.setHealthScale(STANDARD_HEALTH_SCALE);
 
         AttributeInstance maxHealthAttribute = player.getAttribute(Attribute.MAX_HEALTH);
         AttributeInstance armorAttribute = player.getAttribute(Attribute.ARMOR);
-        double maxHealth = maxHealthAttribute == null ? 20.0D : maxHealthAttribute.getValue();
-        double actualArmor = armorAttribute == null ? 0.0D : armorAttribute.getValue();
 
-        int armorBonus = getArmorBonus(player);
-        double healthBonus = Math.max(0.0D, maxHealth - 20.0D);
-        double baseArmor = Math.max(0.0D, actualArmor - armorBonus);
-        double totalArmorBonus = Math.max(0.0D, actualArmor - baseArmor);
+        // Точные реальные значения, которые сейчас используются сервером.
+        // MAX_HEALTH хранится в health points: 20 points = 10 сердечек.
+        double exactHealthPoints = maxHealthAttribute == null ? 20.0D : maxHealthAttribute.getValue();
+        double exactHeartCount = Math.max(0.0D, exactHealthPoints / 2.0D);
+        double exactArmor = armorAttribute == null ? 0.0D : Math.max(0.0D, armorAttribute.getValue());
 
         String color = color(visualType);
-        String message = color + HEARTS + " §f+" + color + format(healthBonus)
-                + "    " + color + SHIELDS + " §f+" + color + format(totalArmorBonus)
+
+        // Формат как на примере:
+        // 🛡🛡🛡🛡🛡🛡🛡🛡🛡🛡 +1004   ❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️ +1004
+        // Цифры берутся из фактических атрибутов игрока, поэтому отображаются точно.
+        String message = color + SHIELDS + " §f+" + color + format(exactArmor)
+                + "    " + color + HEARTS + " §f+" + color + format(exactHeartCount)
                 + "    §8[" + color + visualType.getDisplayName() + "§8]";
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message));
+
+        player.spigot().sendMessage(
+                ChatMessageType.ACTION_BAR,
+                TextComponent.fromLegacyText(message)
+        );
     }
 
     private UpgradeType getHighestArmorUpgrade(Player player) {
@@ -73,18 +88,11 @@ public final class UpgradeStatusHudListener {
         for (ItemStack item : player.getInventory().getArmorContents()) {
             UpgradeType type = upgradeApplier.getAppliedType(item);
             if (type == null) continue;
-            if (highest == null || type.getLevel() > highest.getLevel() || type.isInfinite()) highest = type;
+            if (highest == null || type.getLevel() > highest.getLevel() || type.isInfinite()) {
+                highest = type;
+            }
         }
         return highest;
-    }
-
-    private int getArmorBonus(Player player) {
-        int total = 0;
-        for (ItemStack item : player.getInventory().getArmorContents()) {
-            UpgradeType type = upgradeApplier.getAppliedType(item);
-            if (type != null) total += type.getAttributeBonus();
-        }
-        return total;
     }
 
     private String color(UpgradeType type) {
@@ -99,6 +107,12 @@ public final class UpgradeStatusHudListener {
 
     private String format(double value) {
         if (Double.isNaN(value) || Double.isInfinite(value)) return "0";
-        return String.format(java.util.Locale.ROOT, "%.0f", Math.max(0.0D, value));
+        double safe = Math.max(0.0D, value);
+        if (Math.abs(safe - Math.rint(safe)) < 0.000001D) {
+            return String.format(java.util.Locale.ROOT, "%.0f", safe);
+        }
+        return String.format(java.util.Locale.ROOT, "%.2f", safe)
+                .replaceAll("0+$", "")
+                .replaceAll("\\.$", "");
     }
 }
