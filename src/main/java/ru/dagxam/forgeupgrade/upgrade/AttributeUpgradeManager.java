@@ -16,11 +16,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Реально изменяет характеристики предмета через AttributeModifier.
- * Каждый уровень полностью заменяет предыдущий бонус.
- * Армагедон использует безопасный лимит +99999 вместо бесконечности.
- */
+/** Реально изменяет характеристики предмета через AttributeModifier. */
 public final class AttributeUpgradeManager {
     private final NamespacedKey markerKey;
     private final NamespacedKey levelKey;
@@ -63,7 +59,7 @@ public final class AttributeUpgradeManager {
             add(meta, Attribute.KNOCKBACK_RESISTANCE, knockbackKey, bonus);
         }
 
-        if (hasMeleeAttributes(material)) {
+        if (hasCombatAttributes(material)) {
             add(meta, Attribute.ATTACK_DAMAGE, damageKey, bonus);
             add(meta, Attribute.ATTACK_SPEED, speedKey, bonus);
         }
@@ -103,10 +99,11 @@ public final class AttributeUpgradeManager {
                 || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
     }
 
-    private boolean hasMeleeAttributes(Material material) {
+    private boolean hasCombatAttributes(Material material) {
         String name = material.name();
         return name.endsWith("_SWORD") || name.endsWith("_AXE") || name.endsWith("_PICKAXE")
-                || name.endsWith("_SHOVEL") || name.endsWith("_HOE") || material == Material.TRIDENT;
+                || name.endsWith("_SHOVEL") || name.endsWith("_HOE") || name.endsWith("_SPEAR")
+                || material == Material.TRIDENT;
     }
 
     public int getLevel(ItemStack item) {
