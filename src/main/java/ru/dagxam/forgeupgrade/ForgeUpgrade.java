@@ -4,7 +4,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import ru.dagxam.forgeupgrade.command.ForgeUpgradeCommand;
 import ru.dagxam.forgeupgrade.listener.ArmageddonArmorListener;
 import ru.dagxam.forgeupgrade.listener.ArmageddonWeaponListener;
-import ru.dagxam.forgeupgrade.listener.SmithingUpgradeListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeAttributeListener;
 import ru.dagxam.forgeupgrade.listener.UpgradeTableListener;
 import ru.dagxam.forgeupgrade.recipe.RecipeManager;
@@ -31,7 +30,8 @@ public final class ForgeUpgrade extends JavaPlugin {
 
         new RecipeManager(this, upgradeManager).registerRecipes();
         getServer().getPluginManager().registerEvents(new UpgradeTableListener(this, upgradeManager, upgradeApplier), this);
-        getServer().getPluginManager().registerEvents(new SmithingUpgradeListener(upgradeManager, upgradeApplier), this);
+
+        // Ванильный кузнечный стол намеренно не перехватывается и работает полностью по стандарту.
         getServer().getPluginManager().registerEvents(new UpgradeAttributeListener(), this);
         getServer().getPluginManager().registerEvents(new ArmageddonArmorListener(this, upgradeApplier), this);
         getServer().getPluginManager().registerEvents(new ArmageddonWeaponListener(this, upgradeApplier), this);
@@ -45,7 +45,8 @@ public final class ForgeUpgrade extends JavaPlugin {
         getLogger().info("ForgeUpgrade успешно включён.");
         getLogger().info("Загружено улучшений: " + upgradeManager.getTypes().length);
         getLogger().info("Крафты улучшений успешно зарегистрированы.");
-        getLogger().info("Собственный Стол улучшений успешно включён.");
+        getLogger().info("Отдельный Стол улучшений успешно включён.");
+        getLogger().info("Обычный кузнечный стол оставлен без изменений.");
         getLogger().info("Реальные бонусы характеристик успешно включены.");
         getLogger().info("Способности Армагедона для брони успешно включены.");
         getLogger().info("Способности Армагедона для оружия успешно включены.");
