@@ -21,9 +21,9 @@ jobs:
       - name: Получение исходного кода
         uses: actions/checkout@v4
 
-      # Устанавливаем Java 26
+      # Устанавливаем Java 26 через актуальную версию action.
       - name: Установка Java 26
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '26'
